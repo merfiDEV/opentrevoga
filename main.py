@@ -50,6 +50,24 @@ PHOTO_RULES = [
     (("швидкісна",), r"D:\code\trevoga\asseti\svidkisna.jpg", "Швидкісна ціль"),
 ]
 
+_ALL_KEYWORDS = sorted(
+    {kw for kw_list, _photo, _label in PHOTO_RULES for kw in kw_list},
+    key=len,
+    reverse=True,
+)
+KEYWORD_RE = re.compile(
+    r"(?<![\w-])(" + "|".join(re.escape(kw) for kw in _ALL_KEYWORDS) + r")(?![\w-])",
+    re.IGNORECASE,
+)
+
+
+def format_post_html(text):
+    escaped = escape(text).strip()
+    if not escaped:
+        return ""
+    bolded = KEYWORD_RE.sub(r"<b>\1</b>", escaped)
+    return f"<blockquote>{bolded}</blockquote>"
+
 
 def clean_text(text):
     kept = []
@@ -163,7 +181,7 @@ async def forward_to_group_c(event):
     source = chat_name(event.chat, str(event.chat_id))
     print(f"Received message {msg.id} from {source}")
     text = clean_text(msg.text or "")
-    quoted = quote_html(text)
+    quoted = format_post_html(text)
     lowered = text.lower()
     keywords = detect_keywords(lowered)
     attach_photos = [
