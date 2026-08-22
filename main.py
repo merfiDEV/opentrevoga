@@ -352,10 +352,19 @@ async def handle_reactions(update):
         print(f"Error handling reaction: {e!r}")
 
 
-@client.on(events.NewMessage(pattern=r"^\.stats$"))
+@client.on(events.NewMessage(pattern=r"^\.stat(?:s)?(?:\s+(\d+))?$"))
 async def show_stats(event):
     try:
-        await event.respond(build_stats_text(), parse_mode="html")
+        hours_str = event.pattern_match.group(1)
+        if hours_str:
+            hours = int(hours_str)
+            if 1 <= hours <= 24:
+                text = "<blockquote>" + build_report(hours) + "</blockquote>"
+            else:
+                text = "<blockquote>Введіть від 1 до 24</blockquote>"
+        else:
+            text = build_stats_text()
+        await event.respond(text, parse_mode="html")
         await event.delete()
         print(f"Stats sent on request from {event.sender_id}")
     except Exception as e:
