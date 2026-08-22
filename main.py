@@ -265,27 +265,24 @@ async def handle_comment(event):
         orig_quote = quote_html(orig_text)
         comment_quote = quote_html(comment)
 
+        parts = []
+        if orig_quote:
+            parts.append(orig_quote)
+        parts.append(f"Доп коммент.\n{comment_quote}")
+        combined = "\n\n".join(parts) + f"\n\n{WATERMARK}"
+
         entry = {"main": {}, "comments": []}
         for target in config.GROUP_D_TARGETS:
             try:
-                sent = None
                 if orig.media:
                     sent = await client.send_file(
-                        target, orig.media, caption=orig_quote, parse_mode="html"
+                        target, orig.media, caption=combined, parse_mode="html"
                     )
-                elif orig_quote:
+                else:
                     sent = await client.send_message(
-                        target, orig_quote, parse_mode="html"
+                        target, combined, parse_mode="html"
                     )
-                if sent is not None:
-                    entry["main"][target] = sent.id
-
-                comment_msg = await client.send_message(
-                    target,
-                    f"Доп коммент.\n{comment_quote}",
-                    parse_mode="html",
-                )
-                entry["comments"].append(comment_msg.id)
+                entry["main"][target] = sent.id
             except Exception as e:
                 print(f"Failed to deliver comment to {target}: {e!r}")
 
