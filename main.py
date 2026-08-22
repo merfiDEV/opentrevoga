@@ -371,6 +371,10 @@ async def main():
     global group_c_peer_id
     await client.start()
 
+    print("Caching entities (dialogs)...")
+    async for _dialog in client.iter_dialogs():
+        pass
+
     try:
         entity = await client.get_entity(config.GROUP_C)
     except ValueError:
