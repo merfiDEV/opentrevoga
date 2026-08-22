@@ -135,6 +135,28 @@ def build_stats_text():
     return "=== СТАТИСТИКА ===\n\n" + build_report(12) + "\n\n" + build_report(24)
 
 
+async def delete_entry(entry):
+    ids_by_target = {}
+    for target, msg_id in (entry.get("main") or {}).items():
+        ids_by_target.setdefault(target, []).append(msg_id)
+    comments = entry.get("comments", [])
+    if comments and isinstance(comments[0], tuple):
+        for target, msg_id in comments:
+            ids_by_target.setdefault(target, []).append(msg_id)
+    else:
+        first_target = next(iter(entry.get("main") or {config.GROUP_D_TARGETS[0]: 0}))
+        ids_by_target.setdefault(first_target, []).extend(comments)
+
+    deleted = 0
+    for target, ids in ids_by_target.items():
+        try:
+            await client.delete_messages(target, ids)
+            deleted += len(ids)
+        except Exception as e:
+            print(f"Failed to delete messages in {target}: {e!r}")
+    return deleted
+
+
 @client.on(events.NewMessage(chats=config.SOURCE_CHANNELS))
 async def forward_to_group_c(event):
     msg = event.message
@@ -182,16 +204,11 @@ async def handle_comment(event):
             orig = await msg.get_reply_message()
             entry = forwarded_to_d.pop(orig.id, None) if orig else None
             if entry:
-                ids = []
-                if entry.get("main"):
-                    ids.append(entry["main"][1])
-                ids.extend(entry.get("comments", []))
-                if ids:
-                    await client.delete_messages(config.GROUP_D, ids)
-                    print(
-                        f"Manual recall of {orig.id}: deleted {len(ids)} "
-                        f"message(s) from group D ({config.GROUP_D})"
-                    )
+                deleted = await delete_entry(entry)
+                print(
+                    f"Manual recall of {orig.id}: deleted {deleted} "
+                    f"message(s) across D targets"
+                )
             else:
                 print(f"Manual recall: nothing sent for message {orig.id if orig else '?'}")
             await msg.delete()
@@ -211,30 +228,43 @@ async def handle_comment(event):
         orig_quote = quote_html(orig_text)
         comment_quote = quote_html(comment)
 
-        sent = None
-        if orig.media:
-            sent = await client.send_file(
-                config.GROUP_D, orig.media, caption=orig_quote, parse_mode="html"
-            )
-        elif orig_quote:
-            sent = await client.send_message(
-                config.GROUP_D, orig_quote, parse_mode="html"
-            )
+        entry = {"main": {}, "comments": []}
+        for target in config.GROUP_D_TARGETS:
+            try:
+                sent = None
+                if orig.media:
+                    sent = await client.send_file(
+                        target, orig.media, caption=orig_quote, parse_mode="html"
+                    )
+                elif orig_quote:
+                    sent = await client.send_message(
+                        target, orig_quote, parse_mode="html"
+                    )
+                if sent is not None:
+                    entry["main"][target] = sent.id
 
-        comment_msg = await client.send_message(
-            config.GROUP_D,
-            f"Доп коммент.\n{comment_quote}",
-            parse_mode="html",
-        )
+                comment_msg = await client.send_message(
+                    target,
+                    f"Доп коммент.\n{comment_quote}",
+                    parse_mode="html",
+                )
+                entry["comments"].append(comment_msg.id)
+            except Exception as e:
+                print(f"Failed to deliver comment to {target}: {e!r}")
 
-        entry = forwarded_to_d.setdefault(orig.id, {"main": None, "comments": []})
-        if sent is not None and entry["main"] is None:
-            entry["main"] = (sent.chat_id, sent.id)
-        entry["comments"].append(comment_msg.id)
+        old = forwarded_to_d.get(orig.id)
+        if old:
+            old["main"].update(
+                {t: m for t, m in entry["main"].items() if t not in old["main"]}
+            )
+            old["comments"].extend(entry["comments"])
+        else:
+            forwarded_to_d[orig.id] = entry
 
         record_stat("to_d", msg_id=orig.id)
         print(
-            f"Comment on message {orig.id} delivered to group D ({config.GROUP_D})"
+            f"Comment on message {orig.id} delivered to D targets "
+            f"({len(config.GROUP_D_TARGETS)})"
         )
     except Exception as e:
         print(f"Error handling comment: {e!r}")
@@ -254,16 +284,11 @@ async def handle_reactions(update):
         if total == 0:
             entry = forwarded_to_d.pop(update.msg_id, None)
             if entry:
-                ids = []
-                if entry.get("main"):
-                    ids.append(entry["main"][1])
-                ids.extend(entry.get("comments", []))
-                if ids:
-                    await client.delete_messages(config.GROUP_D, ids)
-                    print(
-                        f"Recalled message {update.msg_id}: deleted {len(ids)} "
-                        f"message(s) from group D ({config.GROUP_D})"
-                    )
+                deleted = await delete_entry(entry)
+                print(
+                    f"Recalled message {update.msg_id}: deleted {deleted} "
+                    f"message(s) across D targets"
+                )
             return
 
         if update.msg_id in forwarded_to_d:
@@ -271,15 +296,21 @@ async def handle_reactions(update):
 
         msg = await client.get_messages(update.peer, ids=update.msg_id)
         if msg:
-            fwd = await msg.forward_to(config.GROUP_D)
+            main_refs = {}
+            for target in config.GROUP_D_TARGETS:
+                try:
+                    fwd = await msg.forward_to(target)
+                    main_refs[target] = fwd.id
+                except Exception as e:
+                    print(f"Failed to forward to {target}: {e!r}")
             forwarded_to_d[update.msg_id] = {
-                "main": (fwd.chat_id, fwd.id),
+                "main": main_refs,
                 "comments": [],
             }
             record_stat("to_d", msg_id=update.msg_id)
             print(
-                f"Forwarded message {msg.id} from group C to group D "
-                f"({config.GROUP_D}) by reaction"
+                f"Forwarded message {msg.id} from group C to "
+                f"{len(main_refs)}/{len(config.GROUP_D_TARGETS)} D targets by reaction"
             )
         else:
             print(f"Message {update.msg_id} not found in group C")

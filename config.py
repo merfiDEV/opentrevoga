@@ -12,4 +12,13 @@ SOURCE_CHANNELS = [
 ]
 
 GROUP_C = int(os.getenv("GROUP_C", "0"))
-GROUP_D = int(os.getenv("GROUP_D", "0"))
+
+
+def _parse_target(value):
+    value = value.strip()
+    return int(value) if value.lstrip("-").isdigit() else value
+
+
+GROUP_D_TARGETS = [
+    _parse_target(t) for t in os.getenv("GROUP_D_TARGETS", "").split(",") if t.strip()
+]
