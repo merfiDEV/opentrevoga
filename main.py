@@ -163,7 +163,9 @@ def build_report(hours):
 
 def build_stats_text():
     body = build_report(12) + "\n\n" + build_report(24)
-    return f"<blockquote>=== СТАТИСТИКА ===\n\n{body}</blockquote>"
+    return (
+        f"<blockquote>=== СТАТИСТИКА ===\n\n{body}\n\n{WATERMARK}</blockquote>"
+    )
 
 
 async def delete_entry(entry):
@@ -359,7 +361,12 @@ async def show_stats(event):
         if hours_str:
             hours = int(hours_str)
             if 1 <= hours <= 24:
-                text = "<blockquote>" + build_report(hours) + "</blockquote>"
+                text = (
+                    "<blockquote>"
+                    + build_report(hours)
+                    + f"\n\n{WATERMARK}"
+                    + "</blockquote>"
+                )
             else:
                 text = "<blockquote>Введіть від 1 до 24</blockquote>"
         else:
