@@ -48,6 +48,11 @@ PHOTO_RULES = [
     (("рсзв", "рсзо"), r"D:\code\trevoga\asseti\rszo.jpg", "РСЗВ/РСЗО"),
     (("фпв", "fpv"), r"D:\code\trevoga\asseti\fpv.jpg", "FPV"),
     (("швидкісна",), r"D:\code\trevoga\asseti\svidkisna.jpg", "Швидкісна ціль"),
+    (
+        ("балістичн", "балістик", "балістичні", "балістична", "балістика"),
+        r"D:\code\trevoga\asseti\ballistika.jpg",
+        "Балістичні ракети",
+    ),
 ]
 
 _ALL_KEYWORDS = sorted(
