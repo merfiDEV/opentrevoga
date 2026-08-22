@@ -4,6 +4,7 @@ import os
 import re
 import time
 from collections import Counter
+from html import escape
 
 from telethon import TelegramClient, events, utils
 from telethon.tl.types import UpdateMessageReactions
@@ -71,6 +72,11 @@ def detect_keywords(lowered):
     return found
 
 
+def quote_html(text):
+    t = escape(text).strip()
+    return f"<blockquote>{t}</blockquote>" if t else ""
+
+
 def chat_name(chat, fallback=""):
     username = getattr(chat, "username", None)
     if username:
@@ -135,7 +141,7 @@ async def forward_to_group_c(event):
     source = chat_name(event.chat, str(event.chat_id))
     print(f"Received message {msg.id} from {source}")
     text = clean_text(msg.text or "")
-    quoted = f"<blockquote>{text}</blockquote>" if text else ""
+    quoted = quote_html(text)
     lowered = text.lower()
     keywords = detect_keywords(lowered)
     attach_photos = [
@@ -164,6 +170,76 @@ async def forward_to_group_c(event):
         print(f"Failed to send message {msg.id} to group C: {e!r}")
 
 
+@client.on(events.NewMessage(chats=config.GROUP_C))
+async def handle_comment(event):
+    msg = event.message
+    raw = (msg.raw_text or "").strip().lower()
+    if not msg.is_reply or raw == ".stats":
+        return
+
+    if raw in {".отмена", ".delete", ".удалить"}:
+        try:
+            orig = await msg.get_reply_message()
+            entry = forwarded_to_d.pop(orig.id, None) if orig else None
+            if entry:
+                ids = []
+                if entry.get("main"):
+                    ids.append(entry["main"][1])
+                ids.extend(entry.get("comments", []))
+                if ids:
+                    await client.delete_messages(config.GROUP_D, ids)
+                    print(
+                        f"Manual recall of {orig.id}: deleted {len(ids)} "
+                        f"message(s) from group D ({config.GROUP_D})"
+                    )
+            else:
+                print(f"Manual recall: nothing sent for message {orig.id if orig else '?'}")
+            await msg.delete()
+        except Exception as e:
+            print(f"Recall command error: {e!r}")
+        return
+
+    comment = clean_text(msg.text or "")
+    if not comment:
+        return
+    try:
+        orig = await msg.get_reply_message()
+        if not orig:
+            return
+
+        orig_text = clean_text(orig.text or "")
+        orig_quote = quote_html(orig_text)
+        comment_quote = quote_html(comment)
+
+        sent = None
+        if orig.media:
+            sent = await client.send_file(
+                config.GROUP_D, orig.media, caption=orig_quote, parse_mode="html"
+            )
+        elif orig_quote:
+            sent = await client.send_message(
+                config.GROUP_D, orig_quote, parse_mode="html"
+            )
+
+        comment_msg = await client.send_message(
+            config.GROUP_D,
+            f"Доп коммент.\n{comment_quote}",
+            parse_mode="html",
+        )
+
+        entry = forwarded_to_d.setdefault(orig.id, {"main": None, "comments": []})
+        if sent is not None and entry["main"] is None:
+            entry["main"] = (sent.chat_id, sent.id)
+        entry["comments"].append(comment_msg.id)
+
+        record_stat("to_d", msg_id=orig.id)
+        print(
+            f"Comment on message {orig.id} delivered to group D ({config.GROUP_D})"
+        )
+    except Exception as e:
+        print(f"Error handling comment: {e!r}")
+
+
 @client.on(events.Raw())
 async def handle_reactions(update):
     if not isinstance(update, UpdateMessageReactions):
@@ -176,13 +252,18 @@ async def handle_reactions(update):
         print(f"Reaction update in group C, msg {update.msg_id}, total={total}")
 
         if total == 0:
-            ref = forwarded_to_d.pop(update.msg_id, None)
-            if ref:
-                await client.delete_messages(ref[0], [ref[1]])
-                print(
-                    f"Recalled message {update.msg_id}: deleted {ref[1]} "
-                    f"from group D ({config.GROUP_D})"
-                )
+            entry = forwarded_to_d.pop(update.msg_id, None)
+            if entry:
+                ids = []
+                if entry.get("main"):
+                    ids.append(entry["main"][1])
+                ids.extend(entry.get("comments", []))
+                if ids:
+                    await client.delete_messages(config.GROUP_D, ids)
+                    print(
+                        f"Recalled message {update.msg_id}: deleted {len(ids)} "
+                        f"message(s) from group D ({config.GROUP_D})"
+                    )
             return
 
         if update.msg_id in forwarded_to_d:
@@ -191,7 +272,10 @@ async def handle_reactions(update):
         msg = await client.get_messages(update.peer, ids=update.msg_id)
         if msg:
             fwd = await msg.forward_to(config.GROUP_D)
-            forwarded_to_d[update.msg_id] = (fwd.chat_id, fwd.id)
+            forwarded_to_d[update.msg_id] = {
+                "main": (fwd.chat_id, fwd.id),
+                "comments": [],
+            }
             record_stat("to_d", msg_id=update.msg_id)
             print(
                 f"Forwarded message {msg.id} from group C to group D "
