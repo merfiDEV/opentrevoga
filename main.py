@@ -11,7 +11,9 @@ from telethon.tl.types import UpdateMessageReactions
 
 import config
 
-client = TelegramClient("session", config.API_ID, config.API_HASH)
+client = TelegramClient(
+    "session", config.API_ID, config.API_HASH, catch_up=True
+)
 forwarded_to_d = {}
 group_c_peer_id = None
 
