@@ -23,6 +23,8 @@ STATS_FILE = os.path.join(
 )
 STATS_TTL = 24 * 3600
 
+WATERMARK = "OpenTrevoga 🕊"
+
 EMOJI_PATTERN = re.compile(
     "["
     "\U0001F000-\U0001FAFF"
@@ -191,8 +193,8 @@ async def forward_to_group_c(event):
     msg = event.message
     source = chat_name(event.chat, str(event.chat_id))
     print(f"Received message {msg.id} from {source}")
-    text = clean_text(msg.text or "")
-    quoted = format_post_html(text)
+    text = clean_text(msg.raw_text or "")
+    body = format_post_html(text)
     lowered = text.lower()
     keywords = detect_keywords(lowered)
     attach_photos = [
@@ -200,6 +202,12 @@ async def forward_to_group_c(event):
         for kw_list, photo, _label in PHOTO_RULES
         if any(kw in lowered for kw in kw_list) and os.path.exists(photo)
     ]
+    if body:
+        quoted = f"{body}\n\n{WATERMARK}"
+    elif attach_photos or msg.media:
+        quoted = WATERMARK
+    else:
+        quoted = ""
     record_stat("to_c", source=source, keywords=keywords)
     try:
         if attach_photos:
@@ -245,7 +253,7 @@ async def handle_comment(event):
             print(f"Recall command error: {e!r}")
         return
 
-    comment = clean_text(msg.text or "")
+    comment = clean_text(msg.raw_text or "")
     if not comment:
         return
     try:
@@ -253,7 +261,7 @@ async def handle_comment(event):
         if not orig:
             return
 
-        orig_text = clean_text(orig.text or "")
+        orig_text = clean_text(orig.raw_text or "")
         orig_quote = quote_html(orig_text)
         comment_quote = quote_html(comment)
 
