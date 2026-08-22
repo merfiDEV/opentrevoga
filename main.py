@@ -46,6 +46,7 @@ PHOTO_RULES = [
     ),
     (("рсзв", "рсзо"), r"D:\code\trevoga\asseti\rszo.jpg", "РСЗВ/РСЗО"),
     (("фпв", "fpv"), r"D:\code\trevoga\asseti\fpv.jpg", "FPV"),
+    (("швидкісна",), r"D:\code\trevoga\asseti\svidkisna.jpg", "Швидкісна ціль"),
 ]
 
 
@@ -137,17 +138,20 @@ async def forward_to_group_c(event):
     quoted = f"<blockquote>{text}</blockquote>" if text else ""
     lowered = text.lower()
     keywords = detect_keywords(lowered)
-    attach_photo = None
-    for kw_list, photo, _label in PHOTO_RULES:
-        if any(kw in lowered for kw in kw_list) and os.path.exists(photo):
-            attach_photo = photo
-            break
+    attach_photos = [
+        photo
+        for kw_list, photo, _label in PHOTO_RULES
+        if any(kw in lowered for kw in kw_list) and os.path.exists(photo)
+    ]
     try:
-        if attach_photo:
+        if attach_photos:
             await client.send_file(
-                config.GROUP_C, attach_photo, caption=quoted, parse_mode="html"
+                config.GROUP_C,
+                attach_photos,
+                caption=quoted,
+                parse_mode="html",
             )
-            print(f"Attached photo {attach_photo} to message {msg.id}")
+            print(f"Attached {len(attach_photos)} photo(s) to message {msg.id}")
         elif msg.media:
             await client.send_file(
                 config.GROUP_C, msg.media, caption=quoted, parse_mode="html"
