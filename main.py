@@ -15,7 +15,10 @@ client = TelegramClient("session", config.API_ID, config.API_HASH)
 forwarded_to_d = {}
 group_c_peer_id = None
 
-STATS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stats.json")
+STATS_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    os.getenv("STATS_FILE_NAME", "stats.json"),
+)
 STATS_TTL = 24 * 3600
 
 EMOJI_PATTERN = re.compile(
@@ -148,14 +151,15 @@ def build_report(hours):
     lines = [f"--- За {hours} год ---"]
     if counter:
         for label, n in counter.most_common():
-            lines.append(f"{label} - {n}")
+            lines.append(f"<b>{label}</b> - {n}")
     else:
         lines.append("Ключових слів не знайдено")
     return "\n".join(lines)
 
 
 def build_stats_text():
-    return "=== СТАТИСТИКА ===\n\n" + build_report(12) + "\n\n" + build_report(24)
+    body = build_report(12) + "\n\n" + build_report(24)
+    return f"<blockquote>=== СТАТИСТИКА ===\n\n{body}</blockquote>"
 
 
 async def delete_entry(entry):
@@ -194,6 +198,7 @@ async def forward_to_group_c(event):
         for kw_list, photo, _label in PHOTO_RULES
         if any(kw in lowered for kw in kw_list) and os.path.exists(photo)
     ]
+    record_stat("to_c", source=source, keywords=keywords)
     try:
         if attach_photos:
             await client.send_file(
@@ -210,7 +215,6 @@ async def forward_to_group_c(event):
         else:
             await client.send_message(config.GROUP_C, quoted, parse_mode="html")
         print(f"Forwarded message {msg.id} from {source} to group C ({config.GROUP_C})")
-        record_stat("to_c", source=source, keywords=keywords)
     except Exception as e:
         print(f"Failed to send message {msg.id} to group C: {e!r}")
 
@@ -341,10 +345,10 @@ async def handle_reactions(update):
         print(f"Error handling reaction: {e!r}")
 
 
-@client.on(events.NewMessage(chats=config.GROUP_C, pattern=r"^\.stats$"))
+@client.on(events.NewMessage(pattern=r"^\.stats$"))
 async def show_stats(event):
     try:
-        await event.respond(build_stats_text())
+        await event.respond(build_stats_text(), parse_mode="html")
         await event.delete()
         print(f"Stats sent on request from {event.sender_id}")
     except Exception as e:
