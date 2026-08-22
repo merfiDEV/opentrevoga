@@ -40,6 +40,7 @@ EMOJI_PATTERN = re.compile(
 
 LINK_PATTERN = re.compile(r"(?:https?://|www\.|t\.me/)\S+", re.IGNORECASE)
 FOOTER_LINES = {"донецька сова", "чат", "підтримати"}
+WATERMARK_PLAIN = EMOJI_PATTERN.sub("", WATERMARK).strip()
 
 PHOTO_RULES = [
     (
@@ -87,7 +88,11 @@ def clean_text(text):
         if LINK_PATTERN.search(line):
             continue
         stripped = EMOJI_PATTERN.sub("", line).strip()
-        if not stripped or stripped.lower() in FOOTER_LINES:
+        if (
+            not stripped
+            or stripped.lower() in FOOTER_LINES
+            or stripped.lower() == WATERMARK_PLAIN.lower()
+        ):
             continue
         kept.append(stripped)
     result = "\n".join(kept)
