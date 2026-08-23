@@ -10,6 +10,7 @@ class HandlerContext:
     moderation: object
     statistics: object
     group_c_peer_id: int | None = None
+    moderation_results: object | None = None
 
     def is_admin(self, user_id: int | None) -> bool:
         return user_id in self.settings.admin_ids

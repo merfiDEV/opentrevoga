@@ -16,7 +16,11 @@ from trevoga.services.publishing import PublishingService
 from trevoga.services.statistics import StatisticsService
 from trevoga.services.text_cleaner import photo_rules
 from trevoga.storage.database import Database
-from trevoga.storage.repositories import ForwardedPostRepository, StatisticsRepository
+from trevoga.storage.repositories import (
+    ForwardedPostRepository,
+    ModerationRepository,
+    StatisticsRepository,
+)
 
 
 async def run():
@@ -30,6 +34,7 @@ async def run():
     client = create_client(settings)
     posts = ForwardedPostRepository(database)
     stats_repository = StatisticsRepository(database)
+    moderation_repository = ModerationRepository(database)
     statistics = StatisticsService(stats_repository)
     moderation = ModerationService(
         AIClient(
@@ -65,6 +70,7 @@ async def run():
         moderation,
         statistics,
         utils.get_peer_id(entity),
+        moderation_repository,
     )
 
     async def publish_ai_approved(message_id, caption):
@@ -79,6 +85,11 @@ async def run():
         await publisher.forward_to_targets(message)
 
     moderation.on_approved = publish_ai_approved
+
+    async def save_moderation_result(result):
+        moderation_repository.save(result)
+
+    moderation.on_moderation_result = save_moderation_result
     register_sources(client, context)
     register_comments(client, context)
     register_reactions(client, context)

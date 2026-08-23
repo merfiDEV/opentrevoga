@@ -2,7 +2,7 @@ import json
 import time
 from collections import Counter
 
-from trevoga.models import ForwardedPost
+from trevoga.models import ForwardedPost, ModerationResult
 from trevoga.storage.database import Database
 
 
@@ -86,3 +86,52 @@ class StatisticsRepository:
                 "DELETE FROM statistics WHERE created_at < ?",
                 (time.time() - ttl_hours * 3600,),
             )
+
+
+class ModerationRepository:
+    def __init__(self, database: Database):
+        self.database = database
+
+    def save(self, result: ModerationResult) -> None:
+        with self.database.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO moderation_results
+                    (message_id, useful, reason, reason_text, confidence,
+                     raw_response, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(message_id) DO UPDATE SET
+                    useful = excluded.useful, reason = excluded.reason,
+                    reason_text = excluded.reason_text,
+                    confidence = excluded.confidence,
+                    raw_response = excluded.raw_response,
+                    status = excluded.status, created_at = excluded.created_at
+                """,
+                (
+                    result.message_id,
+                    int(result.useful),
+                    result.reason,
+                    result.reason_text,
+                    result.confidence,
+                    result.raw_response,
+                    result.status,
+                    time.time(),
+                ),
+            )
+
+    def get(self, message_id: int) -> ModerationResult | None:
+        with self.database.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM moderation_results WHERE message_id = ?", (message_id,)
+            ).fetchone()
+        if not row:
+            return None
+        return ModerationResult(
+            message_id=row["message_id"],
+            useful=bool(row["useful"]),
+            reason=row["reason"],
+            reason_text=row["reason_text"],
+            confidence=row["confidence"],
+            raw_response=row["raw_response"],
+            status=row["status"],
+        )

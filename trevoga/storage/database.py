@@ -30,5 +30,15 @@ class Database:
                     message_id INTEGER,
                     created_at REAL NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS moderation_results (
+                    message_id INTEGER PRIMARY KEY,
+                    useful INTEGER NOT NULL,
+                    reason TEXT,
+                    reason_text TEXT NOT NULL DEFAULT '',
+                    confidence REAL,
+                    raw_response TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL,
+                    created_at REAL NOT NULL
+                );
                 """
             )

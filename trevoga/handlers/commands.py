@@ -1,7 +1,19 @@
+import html
+
 from telethon import events
 
 from trevoga.handlers.context import HandlerContext
 from trevoga.services.text_cleaner import WATERMARK, clean_text, format_post_html
+
+
+HELP_TEXT = """<blockquote>=== КОМАНДЫ АДМИНИСТРАТОРА ===
+
+.ai | .ai on | .ai off | .ai status
+.fix | .fix short | .fix urgent | .fix official | .fix neutral
+.stats | .stats 12 | .stats 24
+.ai_reason [MESSAGE_ID] или ответом на сообщение
+.отмена | .delete | .удалить
+.help</blockquote>"""
 
 
 def register(client, context: HandlerContext):
@@ -40,11 +52,26 @@ def register(client, context: HandlerContext):
         elif argument == "off":
             context.moderation.enabled = False
         elif not argument:
-            context.moderation.enabled = not context.moderation.enabled
+            if context.moderation.enabled:
+                context.moderation.enabled = False
+            else:
+                available, response = await context.moderation.enable()
+                if not available:
+                    await event.respond(
+                        f"<blockquote>AI не включен: {response}</blockquote>",
+                        parse_mode="html",
+                    )
+                    await event.delete()
+                    return
         await event.respond(context.moderation.status_text(), parse_mode="html")
         await event.delete()
 
-    @client.on(events.NewMessage(chats=context.settings.group_c, pattern=r"^\.fix\s*$"))
+    @client.on(
+        events.NewMessage(
+            chats=context.settings.group_c,
+            pattern=r"^\.fix(?:\s+(short|urgent|official|neutral))?\s*$",
+        )
+    )
     async def fix(event):
         if not context.is_admin(event.sender_id):
             return
@@ -53,7 +80,9 @@ def register(client, context: HandlerContext):
             return
         reply = await event.message.get_reply_message()
         original = clean_text(reply.raw_text or "") if reply else ""
-        fixed = await context.moderation.fix(original) if original else None
+        mode = (event.message.raw_text or "").strip().split(maxsplit=1)
+        fix_mode = mode[1].lower() if len(mode) > 1 else "default"
+        fixed = await context.moderation.fix(original, fix_mode) if original else None
         if fixed and fixed.strip() != original.strip():
             await client.edit_message(
                 context.settings.group_c,
@@ -62,3 +91,41 @@ def register(client, context: HandlerContext):
                 parse_mode="html",
             )
         await event.message.delete()
+
+    @client.on(
+        events.NewMessage(chats=context.settings.group_c, pattern=r"^\.help\s*$")
+    )
+    async def help_command(event):
+        if context.is_admin(event.sender_id):
+            await event.respond(HELP_TEXT, parse_mode="html")
+            await event.delete()
+
+    @client.on(
+        events.NewMessage(
+            chats=context.settings.group_c, pattern=r"^\.ai_reason(?:\s+(\d+))?\s*$"
+        )
+    )
+    async def ai_reason(event):
+        if not context.is_admin(event.sender_id):
+            return
+        value = event.pattern_match.group(1)
+        message_id = int(value) if value else None
+        if message_id is None and event.message.is_reply:
+            reply = await event.message.get_reply_message()
+            message_id = reply.id if reply else None
+        result = context.moderation_results.get(message_id) if message_id else None
+        if not result:
+            text = "<blockquote>Результат AI-проверки не найден</blockquote>"
+        else:
+            reason = result.reason or "нет"
+            text = (
+                "<blockquote>"
+                f"Сообщение: {result.message_id}\n"
+                f"Статус: {html.escape(result.status)}\n"
+                f"Причина: {html.escape(reason)}\n"
+                f"Пояснение: {html.escape(result.reason_text)}\n"
+                f"Уверенность: {result.confidence if result.confidence is not None else 'нет'}"
+                "</blockquote>"
+            )
+        await event.respond(text, parse_mode="html")
+        await event.delete()
