@@ -10,6 +10,7 @@ from telethon import TelegramClient, events, utils
 from telethon.tl.types import UpdateMessageReactions
 
 import aianalyze
+import aifix
 import config
 
 client = TelegramClient(
@@ -261,7 +262,7 @@ async def forward_to_group_c(event):
 async def handle_comment(event):
     msg = event.message
     raw = (msg.raw_text or "").strip().lower()
-    if not msg.is_reply or raw == ".stats":
+    if not msg.is_reply or raw.startswith("."):
         return
 
     if raw in {".отмена", ".delete", ".удалить"}:
@@ -411,6 +412,45 @@ async def ai_mode_command(event):
         )
     except Exception as e:
         print(f"AI mode command error: {e!r}")
+
+
+@client.on(events.NewMessage(chats=config.GROUP_C, pattern=r"^\.fix\s*$"))
+async def fix_command(event):
+    try:
+        msg = event.message
+        if not msg.is_reply:
+            await msg.delete()
+            return
+        reply = await msg.get_reply_message()
+        if not reply:
+            await msg.delete()
+            return
+        orig_clean = clean_text(reply.raw_text or "")
+        if not orig_clean.strip():
+            print(f"Fix skipped for {reply.id}: no text to fix")
+            await msg.delete()
+            return
+        print(f"Fix requested for message {reply.id} by {event.sender_id}")
+        fixed = await aifix.fix_text(orig_clean)
+        if not fixed or fixed.strip() == orig_clean.strip():
+            print(
+                f"Fix skipped for {reply.id}: "
+                f"{'AI error' if not fixed else 'no changes'}"
+            )
+            await msg.delete()
+            return
+        body = format_post_html(fixed)
+        new_caption = f"{body}\n\n{WATERMARK}" if body else WATERMARK
+        try:
+            await client.edit_message(
+                config.GROUP_C, reply.id, new_caption, parse_mode="html"
+            )
+            print(f"Message {reply.id} edited via .fix")
+        except Exception as e:
+            print(f"Fix edit failed for {reply.id}: {e!r}")
+        await msg.delete()
+    except Exception as e:
+        print(f"Fix command error: {e!r}")
 
 
 async def stats_cleanup_loop():
