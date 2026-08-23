@@ -9,6 +9,7 @@ from html import escape
 from telethon import TelegramClient, events, utils
 from telethon.tl.types import UpdateMessageReactions
 
+import aianalyze
 import config
 
 client = TelegramClient(
@@ -195,6 +196,22 @@ async def delete_entry(entry):
     return deleted
 
 
+async def _forward_to_d(msg):
+    main_refs = {}
+    for target in config.GROUP_D_TARGETS:
+        try:
+            fwd = await msg.forward_to(target)
+            main_refs[target] = fwd.id
+        except Exception as e:
+            print(f"Failed to forward to {target}: {e!r}")
+    record_stat("to_d", msg_id=msg.id)
+    print(
+        f"Forwarded message {msg.id} from group C to "
+        f"{len(main_refs)}/{len(config.GROUP_D_TARGETS)} D targets"
+    )
+    return main_refs
+
+
 @client.on(events.NewMessage(chats=config.SOURCE_CHANNELS))
 async def forward_to_group_c(event):
     msg = event.message
@@ -216,22 +233,26 @@ async def forward_to_group_c(event):
     else:
         quoted = ""
     record_stat("to_c", source=source, keywords=keywords)
+    sent = None
     try:
         if attach_photos:
-            await client.send_file(
+            result = await client.send_file(
                 config.GROUP_C,
                 attach_photos,
                 caption=quoted,
                 parse_mode="html",
             )
+            sent = result[0] if isinstance(result, list) else result
             print(f"Attached {len(attach_photos)} photo(s) to message {msg.id}")
         elif msg.media:
-            await client.send_file(
+            sent = await client.send_file(
                 config.GROUP_C, msg.media, caption=quoted, parse_mode="html"
             )
         else:
-            await client.send_message(config.GROUP_C, quoted, parse_mode="html")
+            sent = await client.send_message(config.GROUP_C, quoted, parse_mode="html")
         print(f"Forwarded message {msg.id} from {source} to group C ({config.GROUP_C})")
+        if sent is not None:
+            aianalyze.schedule_check(sent.id, text, quoted)
     except Exception as e:
         print(f"Failed to send message {msg.id} to group C: {e!r}")
 
@@ -337,22 +358,11 @@ async def handle_reactions(update):
 
         msg = await client.get_messages(update.peer, ids=update.msg_id)
         if msg:
-            main_refs = {}
-            for target in config.GROUP_D_TARGETS:
-                try:
-                    fwd = await msg.forward_to(target)
-                    main_refs[target] = fwd.id
-                except Exception as e:
-                    print(f"Failed to forward to {target}: {e!r}")
+            main_refs = await _forward_to_d(msg)
             forwarded_to_d[update.msg_id] = {
                 "main": main_refs,
                 "comments": [],
             }
-            record_stat("to_d", msg_id=update.msg_id)
-            print(
-                f"Forwarded message {msg.id} from group C to "
-                f"{len(main_refs)}/{len(config.GROUP_D_TARGETS)} D targets by reaction"
-            )
         else:
             print(f"Message {update.msg_id} not found in group C")
     except Exception as e:
@@ -383,6 +393,26 @@ async def show_stats(event):
         print(f"Stats command error: {e!r}")
 
 
+@client.on(events.NewMessage(chats=config.GROUP_C, pattern=r"^\.ai(?:\s+(on|off|status))?\s*$"))
+async def ai_mode_command(event):
+    try:
+        arg = (event.pattern_match.group(1) or "").lower()
+        if arg == "on":
+            aianalyze.set_enabled(True)
+        elif arg == "off":
+            aianalyze.set_enabled(False)
+        elif not arg:
+            aianalyze.set_enabled(not aianalyze.is_enabled())
+        await event.respond(aianalyze.status_text(), parse_mode="html")
+        await event.delete()
+        print(
+            f"AI mode is now {'ON' if aianalyze.is_enabled() else 'OFF'} "
+            f"(command from {event.sender_id})"
+        )
+    except Exception as e:
+        print(f"AI mode command error: {e!r}")
+
+
 async def stats_cleanup_loop():
     while True:
         await asyncio.sleep(1800)
@@ -411,6 +441,12 @@ async def main():
                 break
 
     group_c_peer_id = utils.get_peer_id(entity)
+    aianalyze.setup(
+        client,
+        config.GROUP_C,
+        lambda mid: mid in forwarded_to_d,
+        _forward_to_d,
+    )
     print(f"Watching group C ({group_c_peer_id}) for reactions...")
     print("Bot started. Listening for messages and reactions...")
     asyncio.create_task(stats_cleanup_loop())
