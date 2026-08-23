@@ -27,7 +27,7 @@ AI_API_KEY = os.getenv("AI_API_KEY", "").strip()
 AI_CHECK_DELAY = _env_float("AI_CHECK_DELAY", 5.0)
 AI_TIMEOUT = _env_float("AI_TIMEOUT", 60.0)
 
-AI_MARK = "✅ Новина перевірена ШІ на корисність"
+AI_MARK = "✅ Новина перевірена ШІ на корисність. ШІ може помилятися"
 
 SYSTEM_PROMPT = (
     "Ты — строгий фильтр новостей. Тебе дан текст поста из Telegram. "
