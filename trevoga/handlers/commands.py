@@ -29,7 +29,14 @@ def register(client, context: HandlerContext):
             return
         argument = (event.pattern_match.group(1) or "").lower()
         if argument == "on":
-            context.moderation.enabled = True
+            available, response = await context.moderation.enable()
+            if not available:
+                await event.respond(
+                    f"<blockquote>AI не включен: {response}</blockquote>",
+                    parse_mode="html",
+                )
+                await event.delete()
+                return
         elif argument == "off":
             context.moderation.enabled = False
         elif not argument:

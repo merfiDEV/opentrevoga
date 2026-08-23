@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import re
 import uuid
@@ -49,6 +50,7 @@ _chat_id = None
 _is_forwarded = None
 _forward = None
 _enabled = AI_MODE
+logger = logging.getLogger(__name__)
 
 
 def setup(client, chat_id, is_forwarded, forward):
@@ -120,7 +122,7 @@ def schedule_check(msg_id, text, html_caption):
     if not (text and text.strip()) or not html_caption:
         return
     asyncio.create_task(_check_task(msg_id, text.strip(), html_caption))
-    print(f"AI check scheduled for message {msg_id} in {AI_CHECK_DELAY:g}s")
+    logger.info("AI check scheduled for message %s in %ss", msg_id, AI_CHECK_DELAY)
 
 
 async def _fetch_with_reactions(msg_id):
@@ -133,39 +135,43 @@ async def _check_task(msg_id, text, html_caption):
     try:
         await asyncio.sleep(AI_CHECK_DELAY)
         if _is_forwarded(msg_id):
-            print(f"AI check skipped for {msg_id}: already forwarded")
+            logger.info("AI check skipped for %s: already forwarded", msg_id)
             return
 
         msg, total = await _fetch_with_reactions(msg_id)
         if msg is None:
-            print(f"AI check skipped for {msg_id}: message not found")
+            logger.info("AI check skipped for %s: message not found", msg_id)
             return
         if total > 0:
-            print(f"AI check skipped for {msg_id}: has {total} reaction(s)")
+            logger.info("AI check skipped for %s: has %s reaction(s)", msg_id, total)
             return
 
         verdict, raw = await ask_ai(text)
-        print(f"AI verdict for {msg_id}: {'ДА' if verdict else 'НЕТ'} ({raw!r})")
+        logger.info(
+            "AI verdict for %s: %s (%r)", msg_id, "ДА" if verdict else "НЕТ", raw
+        )
         if not verdict or _is_forwarded(msg_id):
             return
 
         msg, total = await _fetch_with_reactions(msg_id)
         if msg is None:
-            print(f"AI forward skipped for {msg_id}: message not found")
+            logger.info("AI forward skipped for %s: message not found", msg_id)
             return
         if total > 0:
-            print(f"AI forward skipped for {msg_id}: reacted during check ({total})")
+            logger.info(
+                "AI forward skipped for %s: reacted during check (%s)", msg_id, total
+            )
             return
 
         try:
             await _client.edit_message(
                 _chat_id, msg_id, _insert_mark_line(html_caption), parse_mode="html"
             )
-            print(f"AI mark added to message {msg_id}")
+            logger.info("AI mark added to message %s", msg_id)
         except Exception as e:
-            print(f"AI mark failed for {msg_id}: {e!r}")
+            logger.warning("AI mark failed for %s: %r", msg_id, e)
 
         if _forward:
             await _forward(msg)
     except Exception as e:
-        print(f"AI check error for message {msg_id}: {e!r}")
+        logger.exception("AI check error for message %s", msg_id)

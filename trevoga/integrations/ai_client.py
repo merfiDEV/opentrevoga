@@ -1,6 +1,10 @@
 import uuid
+import logging
 
 import httpx
+
+
+logger = logging.getLogger(__name__)
 
 
 class AIClient:
@@ -33,3 +37,20 @@ class AIClient:
             response.raise_for_status()
             data = response.json()
         return (data["choices"][0]["message"]["content"] or "").strip()
+
+    async def check(self) -> tuple[bool, str]:
+        """Verify that the configured OpenAI-compatible endpoint is usable."""
+        try:
+            response = await self.complete(
+                "Ответь строго одним словом: OK.",
+                "Проверка соединения.",
+            )
+            if not response:
+                return False, "нейросеть вернула пустой ответ"
+            return True, response
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
+            logger.warning("AI availability check failed: %s", error)
+            return False, str(error)
+        except Exception:
+            logger.exception("Unexpected AI availability check failure")
+            return False, "непредвиденная ошибка"

@@ -1,8 +1,12 @@
 import os
 import uuid
+import logging
 
 import httpx
 from dotenv import load_dotenv
+
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -19,9 +23,7 @@ AI_FIX_API_BASE = (
     or os.getenv("AI_API_BASE")
     or "http://127.0.0.1:8000/v1"
 ).rstrip("/")
-AI_FIX_MODEL = (
-    os.getenv("AI_FIX_MODEL") or os.getenv("AI_MODEL") or "deepseek-v4-flash"
-)
+AI_FIX_MODEL = os.getenv("AI_FIX_MODEL") or os.getenv("AI_MODEL") or "deepseek-v4-flash"
 AI_FIX_API_KEY = os.getenv("AI_FIX_API_KEY") or os.getenv("AI_API_KEY") or ""
 AI_FIX_TIMEOUT = _env_float("AI_FIX_TIMEOUT", 60.0)
 
@@ -60,5 +62,5 @@ async def fix_text(text):
         content = data["choices"][0]["message"]["content"]
         return (content or "").strip() or None
     except Exception as e:
-        print(f"AI fix error: {e!r}")
+        logger.exception("AI fix error")
         return None

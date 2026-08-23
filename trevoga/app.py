@@ -47,6 +47,13 @@ async def run():
         settings.ai_mode,
         settings.ai_check_delay,
     )
+    if settings.ai_mode:
+        available, response = await moderation.enable()
+        if not available:
+            logging.getLogger(__name__).warning(
+                "AI_MODE is enabled in configuration, but AI is unavailable: %s",
+                response,
+            )
     publisher = PublishingService(client, settings, posts, stats_repository)
     await client.start()
     entity = await client.get_entity(settings.group_c)

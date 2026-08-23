@@ -50,6 +50,19 @@ class ModerationService:
     async def approve(self, text: str) -> bool:
         return parse_verdict(await self.client.complete(MODERATION_PROMPT, text))
 
+    async def check_available(self) -> tuple[bool, str]:
+        return await self.client.check()
+
+    async def enable(self) -> tuple[bool, str]:
+        available, response = await self.check_available()
+        if available:
+            self.enabled = True
+            logger.info("AI moderation enabled after availability check")
+        else:
+            self.enabled = False
+            logger.warning("AI moderation was not enabled: %s", response)
+        return available, response
+
     async def fix(self, text: str) -> str | None:
         try:
             return (
