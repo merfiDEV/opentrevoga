@@ -1,0 +1,1 @@
+"""Telegram news moderation application."""

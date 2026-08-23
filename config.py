@@ -1,30 +1,11 @@
-import os
-
-from dotenv import load_dotenv
-
-load_dotenv()
-
-API_ID = int(os.getenv("API_ID", "0"))
-API_HASH = os.getenv("API_HASH", "")
-
-SOURCE_CHANNELS = [
-    c.strip() for c in os.getenv("SOURCE_CHANNELS", "").split(",") if c.strip()
-]
-
-GROUP_C = int(os.getenv("GROUP_C", "0"))
+from trevoga.config import load_settings
 
 
-def _parse_target(value):
-    value = value.strip()
-    return int(value) if value.lstrip("-").isdigit() else value
+_settings = load_settings()
 
-
-GROUP_D_TARGETS = [
-    _parse_target(t) for t in os.getenv("GROUP_D_TARGETS", "").split(",") if t.strip()
-]
-
-ADMIN_IDS = [
-    int(i.strip())
-    for i in os.getenv("ADMIN_IDS", "").split(",")
-    if i.strip().lstrip("-").isdigit()
-]
+API_ID = _settings.api_id
+API_HASH = _settings.api_hash
+SOURCE_CHANNELS = list(_settings.source_channels)
+GROUP_C = _settings.group_c
+GROUP_D_TARGETS = list(_settings.group_d_targets)
+ADMIN_IDS = list(_settings.admin_ids)
