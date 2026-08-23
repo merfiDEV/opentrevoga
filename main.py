@@ -109,6 +109,10 @@ def detect_keywords(lowered):
     return found
 
 
+def is_admin(sender_id):
+    return sender_id in config.ADMIN_IDS
+
+
 def quote_html(text):
     t = escape(text).strip()
     return f"<blockquote>{t}</blockquote>" if t else ""
@@ -373,6 +377,9 @@ async def handle_reactions(update):
 @client.on(events.NewMessage(pattern=r"^\.stat(?:s)?(?:\s+(\d+))?$"))
 async def show_stats(event):
     try:
+        if not is_admin(event.sender_id):
+            print(f"Stats denied for {event.sender_id}")
+            return
         hours_str = event.pattern_match.group(1)
         if hours_str:
             hours = int(hours_str)
@@ -397,6 +404,9 @@ async def show_stats(event):
 @client.on(events.NewMessage(chats=config.GROUP_C, pattern=r"^\.ai(?:\s+(on|off|status))?\s*$"))
 async def ai_mode_command(event):
     try:
+        if not is_admin(event.sender_id):
+            print(f"AI mode command denied for {event.sender_id}")
+            return
         arg = (event.pattern_match.group(1) or "").lower()
         if arg == "on":
             aianalyze.set_enabled(True)
@@ -418,6 +428,9 @@ async def ai_mode_command(event):
 async def fix_command(event):
     try:
         msg = event.message
+        if not is_admin(msg.sender_id):
+            print(f"Fix denied for {msg.sender_id}")
+            return
         if not msg.is_reply:
             await msg.delete()
             return

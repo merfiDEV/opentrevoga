@@ -22,3 +22,9 @@ def _parse_target(value):
 GROUP_D_TARGETS = [
     _parse_target(t) for t in os.getenv("GROUP_D_TARGETS", "").split(",") if t.strip()
 ]
+
+ADMIN_IDS = [
+    int(i.strip())
+    for i in os.getenv("ADMIN_IDS", "").split(",")
+    if i.strip().lstrip("-").isdigit()
+]
