@@ -21,9 +21,9 @@ WATERMARK_PLAIN = EMOJI_PATTERN.sub("", WATERMARK_TEXT).strip()
 
 
 def watermark() -> str:
-    if not _watermark_enabled:
-        return ""
-    return f'<a href="{WATERMARK_URL}">{WATERMARK_TEXT}</a>'
+    if _watermark_enabled:
+        return f'<a href="{WATERMARK_URL}">{WATERMARK_TEXT}</a>'
+    return WATERMARK_TEXT
 
 
 def set_watermark(enabled: bool) -> None:

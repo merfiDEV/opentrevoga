@@ -128,7 +128,7 @@ def register(client, context: HandlerContext):
         set_watermark(enabled)
         save_watermark(enabled)
         await event.respond(
-            f"<blockquote>Ватермарк: {'включен ✅' if is_watermark_enabled() else 'выключен ❌'}</blockquote>",
+            f"<blockquote>Ссылка в ватермарке: {'включена ✅' if is_watermark_enabled() else 'выключена ❌'}</blockquote>",
             parse_mode="html",
         )
         await event.delete()
