@@ -14,7 +14,7 @@ from trevoga.integrations.telegram import create_client
 from trevoga.services.moderation import ModerationService
 from trevoga.services.publishing import PublishingService
 from trevoga.services.statistics import StatisticsService
-from trevoga.services.text_cleaner import photo_rules
+from trevoga.services.text_cleaner import photo_rules, set_watermark
 from trevoga.storage.database import Database
 from trevoga.storage.repositories import (
     ForwardedPostRepository,
@@ -28,6 +28,7 @@ async def run():
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
     settings = load_settings()
+    set_watermark(settings.watermark_enabled)
     settings.validate()
     database = Database(settings.database_path)
     database.initialize()

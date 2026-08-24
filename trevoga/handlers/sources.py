@@ -4,11 +4,11 @@ from telethon import events
 
 from trevoga.handlers.context import HandlerContext
 from trevoga.services.text_cleaner import (
-    WATERMARK,
     clean_text,
     detect_keywords,
     format_post_html,
     matching_photos,
+    watermark,
 )
 
 
@@ -34,9 +34,9 @@ async def _forward_messages(messages, chat_id, client, context: HandlerContext):
     body = format_post_html(text, context.rules)
     photos = matching_photos(text, context.rules)
     caption = (
-        f"{body}\n\n{WATERMARK}"
+        f"{body}\n\n{watermark()}"
         if body
-        else WATERMARK
+        else watermark()
         if photos or any(item.media for item in messages)
         else ""
     )

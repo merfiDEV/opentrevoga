@@ -2,14 +2,21 @@ import html
 
 from telethon import events
 
-from trevoga.config import save_ai_model
+from trevoga.config import save_ai_model, save_watermark
 from trevoga.handlers.context import HandlerContext
-from trevoga.services.text_cleaner import WATERMARK, clean_text, format_post_html
+from trevoga.services.text_cleaner import (
+    clean_text,
+    format_post_html,
+    is_watermark_enabled,
+    set_watermark,
+    watermark,
+)
 
 
 HELP_TEXT = """<blockquote>=== КОМАНДЫ АДМИНИСТРАТОРА ===
 
 .ai | .ai on | .ai off | .ai status | .ai set [MODEL]
+.wmark | .wmark on | .wmark off
 .fix | .fix short | .fix urgent | .fix official | .fix neutral
 .stats | .stats 12 | .stats 24
 .ai_reason [MESSAGE_ID] или ответом на сообщение
@@ -27,7 +34,7 @@ def register(client, context: HandlerContext):
         text = (
             context.statistics.build_text()
             if hours is None
-            else f"<blockquote>{context.statistics.build_report(hours)}\n\n{WATERMARK}</blockquote>"
+            else f"<blockquote>{context.statistics.build_report(hours)}\n\n{watermark()}</blockquote>"
         )
         await event.respond(text, parse_mode="html")
         await event.delete()
@@ -110,6 +117,25 @@ def register(client, context: HandlerContext):
 
     @client.on(
         events.NewMessage(
+            chats=context.settings.group_c, pattern=r"^\.wmark(?:\s+(on|off))?\s*$"
+        )
+    )
+    async def watermark_command(event):
+        if not context.is_admin(event.sender_id):
+            return
+        value = event.pattern_match.group(1)
+        if value:
+            enabled = value == "on"
+            set_watermark(enabled)
+            save_watermark(enabled)
+        await event.respond(
+            f"<blockquote>Ватермарк: {'включен ✅' if is_watermark_enabled() else 'выключен ❌'}</blockquote>",
+            parse_mode="html",
+        )
+        await event.delete()
+
+    @client.on(
+        events.NewMessage(
             chats=context.settings.group_c,
             pattern=r"^\.fix(?:\s+(short|urgent|official|neutral))?\s*$",
         )
@@ -129,7 +155,7 @@ def register(client, context: HandlerContext):
             await client.edit_message(
                 context.settings.group_c,
                 reply.id,
-                f"{format_post_html(fixed, context.rules)}\n\n{WATERMARK}",
+                f"{format_post_html(fixed, context.rules)}\n\n{watermark()}",
                 parse_mode="html",
             )
         await event.message.delete()

@@ -1,4 +1,4 @@
-from trevoga.services.text_cleaner import WATERMARK
+from trevoga.services.text_cleaner import watermark
 from trevoga.storage.repositories import StatisticsRepository
 
 
@@ -18,4 +18,4 @@ class StatisticsService:
 
     def build_text(self) -> str:
         body = self.build_report(12) + "\n\n" + self.build_report(24)
-        return f"<blockquote>=== СТАТИСТИКА ===\n\n{body}\n\n{WATERMARK}</blockquote>"
+        return f"<blockquote>=== СТАТИСТИКА ===\n\n{body}\n\n{watermark()}</blockquote>"

@@ -3,7 +3,7 @@ import logging
 from telethon import events
 
 from trevoga.handlers.context import HandlerContext
-from trevoga.services.text_cleaner import WATERMARK, clean_text, quote_html
+from trevoga.services.text_cleaner import clean_text, quote_html, watermark
 
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ def register(client, context: HandlerContext):
             "\n\n".join(
                 filter(None, [original, f"Доп коммент.\n{quote_html(comment)}"])
             )
-            + f"\n\n{WATERMARK}"
+            + f"\n\n{watermark()}"
         )
         for target in context.settings.group_d_targets:
             try:

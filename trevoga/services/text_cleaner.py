@@ -3,7 +3,9 @@ from html import escape
 from pathlib import Path
 
 
-WATERMARK = "OpenTrevoga 🕊"
+WATERMARK_TEXT = "OpenTrevoga 🕊"
+WATERMARK_URL = "https://telegra.ph/OpenTrevoga---trivogi-bez-shumu-08-24"
+_watermark_enabled = True
 EMOJI_PATTERN = re.compile(
     "["
     "\U0001f000-\U0001faff"
@@ -15,7 +17,22 @@ EMOJI_PATTERN = re.compile(
 )
 LINK_PATTERN = re.compile(r"(?:https?://|www\.|t\.me/)\S+", re.IGNORECASE)
 FOOTER_LINES = {"донецька сова", "чат", "підтримати"}
-WATERMARK_PLAIN = EMOJI_PATTERN.sub("", WATERMARK).strip()
+WATERMARK_PLAIN = EMOJI_PATTERN.sub("", WATERMARK_TEXT).strip()
+
+
+def watermark() -> str:
+    if not _watermark_enabled:
+        return ""
+    return f'<a href="{WATERMARK_URL}">{WATERMARK_TEXT}</a>'
+
+
+def set_watermark(enabled: bool) -> None:
+    global _watermark_enabled
+    _watermark_enabled = enabled
+
+
+def is_watermark_enabled() -> bool:
+    return _watermark_enabled
 
 
 def photo_rules(assets_dir: Path):
