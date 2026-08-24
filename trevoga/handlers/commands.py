@@ -34,16 +34,15 @@ def register(client, context: HandlerContext):
     @client.on(
         events.NewMessage(
             chats=context.settings.group_c,
-            pattern=r"^\.ai(?:\s+(on|off|status)|(set)(?:\s+(.+))?)?\s*$",
+            pattern=r"^\.ai(?:\s+(on|off|status|set)(?:\s+(.+))?)?\s*$",
         )
     )
     async def ai_mode(event):
         if not context.is_admin(event.sender_id):
             return
         argument = (event.pattern_match.group(1) or "").lower()
-        is_set = bool(event.pattern_match.group(2))
-        model = event.pattern_match.group(3)
-        if is_set:
+        model = event.pattern_match.group(2)
+        if argument == "set":
             try:
                 if not model.strip():
                     models = await context.moderation.list_models()

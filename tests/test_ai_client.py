@@ -1,6 +1,13 @@
 import pytest
+import re
 
 from trevoga.integrations.ai_client import AIClient
+
+
+def test_ai_set_command_matches_without_model():
+    pattern = re.compile(r"^\.ai(?:\s+(on|off|status|set)(?:\s+(.+))?)?\s*$")
+    match = pattern.match(".ai set")
+    assert match and match.group(1) == "set" and match.group(2) is None
 
 
 @pytest.mark.asyncio
