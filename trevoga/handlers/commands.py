@@ -2,6 +2,7 @@ import html
 
 from telethon import events
 
+from trevoga.config import save_ai_model
 from trevoga.handlers.context import HandlerContext
 from trevoga.services.text_cleaner import WATERMARK, clean_text, format_post_html
 
@@ -44,8 +45,13 @@ def register(client, context: HandlerContext):
         model = event.pattern_match.group(2)
         if argument == "set":
             try:
-                if not model or not model.strip():
-                    models = await context.moderation.list_models()
+                parts = model.split() if model else []
+                fix = parts[-1].lower() == "fix"
+                if fix:
+                    parts.pop()
+                selected_model = " ".join(parts).strip()
+                if not selected_model:
+                    models = await context.moderation.list_models(fix)
                     if not models:
                         response = (
                             "<blockquote>Доступные модели не найдены</blockquote>"
@@ -59,10 +65,13 @@ def register(client, context: HandlerContext):
                             )
                             + "</blockquote>"
                         )
-                elif await context.moderation.set_model(model.strip()):
+                elif len(parts) > 1:
+                    response = "<blockquote>Формат: .ai set MODEL [fix]</blockquote>"
+                elif await context.moderation.set_model(selected_model, fix):
+                    save_ai_model(selected_model, fix)
                     response = (
-                        f"<blockquote>Модель AI изменена на: "
-                        f"{html.escape(model.strip())}</blockquote>"
+                        f"<blockquote>Модель {'fix' if fix else 'AI'} изменена на: "
+                        f"{html.escape(selected_model)}</blockquote>"
                     )
                 else:
                     response = (

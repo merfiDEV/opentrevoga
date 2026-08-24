@@ -123,14 +123,15 @@ class ModerationService:
             logger.warning("AI moderation was not enabled: %s", response)
         return available, response
 
-    async def list_models(self) -> list[str]:
-        return await self.client.list_models()
+    async def list_models(self, fix: bool = False) -> list[str]:
+        return await (self.fix_client if fix else self.client).list_models()
 
-    async def set_model(self, model: str) -> bool:
-        models = await self.list_models()
+    async def set_model(self, model: str, fix: bool = False) -> bool:
+        client = self.fix_client if fix else self.client
+        models = await self.list_models(fix)
         if model not in models:
             return False
-        self.client.model = model
+        client.model = model
         return True
 
     async def fix(self, text: str, mode: str = "default") -> str | None:

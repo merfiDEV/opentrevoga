@@ -101,3 +101,19 @@ def load_settings() -> Settings:
         ai_fix_api_key=os.getenv("AI_FIX_API_KEY") or ai_key,
         ai_fix_timeout=_env_float("AI_FIX_TIMEOUT", ai_timeout),
     )
+
+
+def save_ai_model(model: str, fix: bool = False) -> None:
+    """Persist a runtime model choice without rewriting unrelated .env values."""
+    name = "AI_FIX_MODEL" if fix else "AI_MODEL"
+    path = BASE_DIR / ".env"
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    replacement = f"{name}={model}"
+    for index, line in enumerate(lines):
+        if line.startswith(f"{name}="):
+            lines[index] = replacement
+            break
+    else:
+        lines.append(replacement)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.environ[name] = model
