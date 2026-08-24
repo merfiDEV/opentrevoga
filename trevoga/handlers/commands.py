@@ -157,6 +157,7 @@ def register(client, context: HandlerContext):
                 reply.id,
                 f"{format_post_html(fixed, context.rules)}\n\n{watermark()}",
                 parse_mode="html",
+                link_preview=False,
             )
         await event.message.delete()
 

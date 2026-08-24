@@ -81,7 +81,7 @@ async def run():
         if not message:
             return
         await client.edit_message(
-            settings.group_c, message_id, caption, parse_mode="html"
+            settings.group_c, message_id, caption, parse_mode="html", link_preview=False
         )
         messages = [message]
         if message.grouped_id:

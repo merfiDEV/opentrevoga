@@ -36,10 +36,16 @@ def register(client, context: HandlerContext):
             try:
                 sent = (
                     await client.send_file(
-                        target, reply.media, caption=combined, parse_mode="html"
+                        target,
+                        reply.media,
+                        caption=combined,
+                        parse_mode="html",
+                        link_preview=False,
                     )
                     if reply.media
-                    else await client.send_message(target, combined, parse_mode="html")
+                    else await client.send_message(
+                        target, combined, parse_mode="html", link_preview=False
+                    )
                 )
                 context.publisher.posts.save_main(reply.id, {str(target): sent.id})
             except Exception:

@@ -48,7 +48,11 @@ async def _forward_messages(messages, chat_id, client, context: HandlerContext):
     try:
         if photos:
             sent = await client.send_file(
-                context.settings.group_c, photos, caption=caption, parse_mode="html"
+                context.settings.group_c,
+                photos,
+                caption=caption,
+                parse_mode="html",
+                link_preview=False,
             )
         elif any(item.media for item in messages):
             sent = await client.send_file(
@@ -56,10 +60,11 @@ async def _forward_messages(messages, chat_id, client, context: HandlerContext):
                 [item.media for item in messages if item.media],
                 caption=caption,
                 parse_mode="html",
+                link_preview=False,
             )
         else:
             sent = await client.send_message(
-                context.settings.group_c, caption, parse_mode="html"
+                context.settings.group_c, caption, parse_mode="html", link_preview=False
             )
         sent_message = sent[0] if isinstance(sent, list) else sent
         context.moderation.schedule_check(sent_message.id, text, caption)
