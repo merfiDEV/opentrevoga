@@ -44,7 +44,7 @@ def register(client, context: HandlerContext):
         model = event.pattern_match.group(2)
         if argument == "set":
             try:
-                if not model.strip():
+                if not model or not model.strip():
                     models = await context.moderation.list_models()
                     if not models:
                         response = (
