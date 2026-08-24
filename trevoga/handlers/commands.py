@@ -8,7 +8,7 @@ from trevoga.services.text_cleaner import WATERMARK, clean_text, format_post_htm
 
 HELP_TEXT = """<blockquote>=== КОМАНДЫ АДМИНИСТРАТОРА ===
 
-.ai | .ai on | .ai off | .ai status
+.ai | .ai on | .ai off | .ai status | .ai set [MODEL]
 .fix | .fix short | .fix urgent | .fix official | .fix neutral
 .stats | .stats 12 | .stats 24
 .ai_reason [MESSAGE_ID] или ответом на сообщение
@@ -33,13 +33,47 @@ def register(client, context: HandlerContext):
 
     @client.on(
         events.NewMessage(
-            chats=context.settings.group_c, pattern=r"^\.ai(?:\s+(on|off|status))?\s*$"
+            chats=context.settings.group_c,
+            pattern=r"^\.ai(?:\s+(on|off|status)|(set)(?:\s+(.+))?)?\s*$",
         )
     )
     async def ai_mode(event):
         if not context.is_admin(event.sender_id):
             return
         argument = (event.pattern_match.group(1) or "").lower()
+        is_set = bool(event.pattern_match.group(2))
+        model = event.pattern_match.group(3)
+        if is_set:
+            try:
+                if not model.strip():
+                    models = await context.moderation.list_models()
+                    if not models:
+                        response = (
+                            "<blockquote>Доступные модели не найдены</blockquote>"
+                        )
+                    else:
+                        response = (
+                            "<blockquote>Доступные модели:\n"
+                            + "\n".join(
+                                f"{index}. {html.escape(name)}"
+                                for index, name in enumerate(models, 1)
+                            )
+                            + "</blockquote>"
+                        )
+                elif await context.moderation.set_model(model.strip()):
+                    response = (
+                        f"<blockquote>Модель AI изменена на: "
+                        f"{html.escape(model.strip())}</blockquote>"
+                    )
+                else:
+                    response = (
+                        "<blockquote>Такой модели нет в списке доступных</blockquote>"
+                    )
+            except Exception as error:
+                response = f"<blockquote>Не удалось получить модели: {html.escape(str(error))}</blockquote>"
+            await event.respond(response, parse_mode="html")
+            await event.delete()
+            return
         if argument == "on":
             available, response = await context.moderation.enable()
             if not available:

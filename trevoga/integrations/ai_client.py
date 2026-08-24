@@ -54,3 +54,13 @@ class AIClient:
         except Exception:
             logger.exception("Unexpected AI availability check failure")
             return False, "непредвиденная ошибка"
+
+    async def list_models(self) -> list[str]:
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        async with httpx.AsyncClient(timeout=self.timeout) as http:
+            response = await http.get(f"{self.base_url}/models", headers=headers)
+            response.raise_for_status()
+            data = response.json()
+        return sorted(model["id"] for model in data.get("data", []) if model.get("id"))

@@ -123,6 +123,16 @@ class ModerationService:
             logger.warning("AI moderation was not enabled: %s", response)
         return available, response
 
+    async def list_models(self) -> list[str]:
+        return await self.client.list_models()
+
+    async def set_model(self, model: str) -> bool:
+        models = await self.list_models()
+        if model not in models:
+            return False
+        self.client.model = model
+        return True
+
     async def fix(self, text: str, mode: str = "default") -> str | None:
         try:
             prompt = FIX_PROMPTS.get(mode, FIX_PROMPTS["default"])
