@@ -63,4 +63,15 @@ class AIClient:
             response = await http.get(f"{self.base_url}/models", headers=headers)
             response.raise_for_status()
             data = response.json()
-        return sorted(model["id"] for model in data.get("data", []) if model.get("id"))
+        raw_models = data.get("data", []) if isinstance(data, dict) else data
+        if not isinstance(raw_models, list):
+            return []
+        models = []
+        for item in raw_models:
+            if isinstance(item, str) and item.strip():
+                models.append(item.strip())
+            elif isinstance(item, dict):
+                model_id = item.get("id") or item.get("name")
+                if isinstance(model_id, str) and model_id.strip():
+                    models.append(model_id.strip())
+        return sorted(set(models))

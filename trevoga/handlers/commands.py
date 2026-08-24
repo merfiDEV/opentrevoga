@@ -46,7 +46,7 @@ def register(client, context: HandlerContext):
         if argument == "set":
             try:
                 parts = model.split() if model else []
-                fix = parts[-1].lower() == "fix"
+                fix = bool(parts) and parts[-1].lower() == "fix"
                 if fix:
                     parts.pop()
                 selected_model = " ".join(parts).strip()
