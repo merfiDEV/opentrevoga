@@ -13,11 +13,21 @@ def register(client, context: HandlerContext):
         ):
             return
         total = sum(reaction.count for reaction in update.reactions.results)
-        if total == 0:
-            await context.publisher.delete_forwarded(update.msg_id)
-            return
-        if context.publisher.posts.exists(update.msg_id):
-            return
         message = await client.get_messages(update.peer, ids=update.msg_id)
         if message:
-            await context.publisher.forward_to_targets(message)
+            messages = [message]
+            if message.grouped_id:
+                nearby = await client.get_messages(
+                    update.peer, min_id=max(0, message.id - 10), max_id=message.id + 10
+                )
+                messages = sorted(
+                    [item for item in nearby if item.grouped_id == message.grouped_id],
+                    key=lambda item: item.id,
+                )
+            primary_id = messages[0].id
+            if total == 0:
+                await context.publisher.delete_forwarded(primary_id)
+                return
+            if context.publisher.posts.exists(primary_id):
+                return
+            await context.publisher.forward_to_targets(messages)

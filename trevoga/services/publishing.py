@@ -21,17 +21,23 @@ class PublishingService:
         self.stats = stats
 
     async def forward_to_targets(self, message) -> dict[str, int]:
+        messages = message if isinstance(message, list) else [message]
+        primary = messages[0]
         references = {}
         for target in self.settings.group_d_targets:
             try:
-                forwarded = await message.forward_to(target)
-                references[str(target)] = forwarded.id
+                if len(messages) == 1:
+                    forwarded = await primary.forward_to(target)
+                else:
+                    forwarded = await self.client.forward_messages(target, messages)
+                forwarded = forwarded if isinstance(forwarded, list) else [forwarded]
+                references[str(target)] = forwarded[0].id
             except Exception:
                 logger.exception(
-                    "Failed to forward message %s to %s", message.id, target
+                    "Failed to forward message %s to %s", primary.id, target
                 )
-        self.posts.save_main(message.id, references)
-        self.stats.record("to_d", message_id=message.id)
+        self.posts.save_main(primary.id, references)
+        self.stats.record("to_d", message_id=primary.id)
         return references
 
     async def delete_forwarded(self, source_message_id: int) -> int:

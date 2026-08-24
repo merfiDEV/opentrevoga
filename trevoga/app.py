@@ -82,7 +82,16 @@ async def run():
         await client.edit_message(
             settings.group_c, message_id, caption, parse_mode="html"
         )
-        await publisher.forward_to_targets(message)
+        messages = [message]
+        if message.grouped_id:
+            nearby = await client.get_messages(
+                settings.group_c, min_id=max(0, message.id - 10), max_id=message.id + 10
+            )
+            messages = sorted(
+                [item for item in nearby if item.grouped_id == message.grouped_id],
+                key=lambda item: item.id,
+            )
+        await publisher.forward_to_targets(messages)
 
     moderation.on_approved = publish_ai_approved
 
