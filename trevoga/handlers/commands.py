@@ -124,10 +124,9 @@ def register(client, context: HandlerContext):
         if not context.is_admin(event.sender_id):
             return
         value = event.pattern_match.group(1)
-        if value:
-            enabled = value == "on"
-            set_watermark(enabled)
-            save_watermark(enabled)
+        enabled = (value == "on") if value else not is_watermark_enabled()
+        set_watermark(enabled)
+        save_watermark(enabled)
         await event.respond(
             f"<blockquote>Ватермарк: {'включен ✅' if is_watermark_enabled() else 'выключен ❌'}</blockquote>",
             parse_mode="html",
