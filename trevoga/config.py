@@ -31,6 +31,7 @@ class Settings:
     source_channels: tuple[str, ...]
     group_c: int
     group_d_targets: tuple[int | str, ...]
+    channel_targets: tuple[int | str, ...]
     admin_ids: tuple[int, ...]
     database_path: Path
     session_path: Path
@@ -81,6 +82,11 @@ def load_settings() -> Settings:
         group_d_targets=tuple(
             _parse_target(value)
             for value in os.getenv("GROUP_D_TARGETS", "").split(",")
+            if value.strip()
+        ),
+        channel_targets=tuple(
+            _parse_target(value)
+            for value in os.getenv("CHANNEL_TARGETS", "").split(",")
             if value.strip()
         ),
         admin_ids=tuple(

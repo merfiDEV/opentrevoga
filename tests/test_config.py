@@ -10,6 +10,7 @@ def test_invalid_settings_are_rejected(tmp_path):
         source_channels=(),
         group_c=0,
         group_d_targets=(),
+        channel_targets=(),
         admin_ids=(),
         database_path=tmp_path / "db",
         session_path=tmp_path / "session",

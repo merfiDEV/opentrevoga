@@ -62,6 +62,7 @@ async def run():
             )
     publisher = PublishingService(client, settings, posts, stats_repository)
     await client.start()
+    await publisher.validate_channel_targets()
     entity = await client.get_entity(settings.group_c)
     context = HandlerContext(
         client,
