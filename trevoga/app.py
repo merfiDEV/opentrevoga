@@ -5,6 +5,7 @@ from telethon import utils
 
 from trevoga.config import load_settings
 from trevoga.handlers.comments import register as register_comments
+from trevoga.handlers.channel_moderation import register as register_channel_moderation
 from trevoga.handlers.commands import register as register_commands
 from trevoga.handlers.context import HandlerContext
 from trevoga.handlers.reactions import register as register_reactions
@@ -102,6 +103,7 @@ async def run():
 
     moderation.on_moderation_result = save_moderation_result
     register_sources(client, context)
+    register_channel_moderation(client, context)
     register_comments(client, context)
     register_reactions(client, context)
     register_commands(client, context)

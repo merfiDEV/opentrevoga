@@ -25,6 +25,7 @@ def test_invalid_settings_are_rejected(tmp_path):
         ai_fix_model="model",
         ai_fix_api_key="",
         ai_fix_timeout=60,
+        channel_moderation_enabled=False,
     )
     with pytest.raises(ValueError):
         settings.validate()

@@ -47,6 +47,7 @@ class Settings:
     ai_fix_api_key: str
     ai_fix_timeout: float
     watermark_enabled: bool = True
+    channel_moderation_enabled: bool = False
 
     def validate(self) -> None:
         errors = []
@@ -108,6 +109,7 @@ def load_settings() -> Settings:
         ai_fix_api_key=os.getenv("AI_FIX_API_KEY") or ai_key,
         ai_fix_timeout=_env_float("AI_FIX_TIMEOUT", ai_timeout),
         watermark_enabled=_env_flag("WATERMARK_ENABLED", "1"),
+        channel_moderation_enabled=_env_flag("CHANNEL_MODERATION_ENABLED"),
     )
 
 
