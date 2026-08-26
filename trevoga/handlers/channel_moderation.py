@@ -30,6 +30,8 @@ def register(client, context):
     @client.on(events.NewMessage(chats=context.settings.channel_targets))
     async def reupload_admin_message(event):
         message = event.message
+        if context.is_channel_ignored(event.chat_id):
+            return
         # Channel posts do not reliably expose the admin sender_id. The handler is
         # restricted to configured broadcast channels and ignores its own copies.
         if message.grouped_id or WATERMARK_TEXT in (message.raw_text or ""):
@@ -41,6 +43,8 @@ def register(client, context):
 
     @client.on(events.Album(chats=context.settings.channel_targets))
     async def reupload_admin_album(event):
+        if context.is_channel_ignored(event.chat_id):
+            return
         if any(
             WATERMARK_TEXT in (message.raw_text or "") for message in event.messages
         ):

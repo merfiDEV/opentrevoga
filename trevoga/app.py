@@ -74,6 +74,7 @@ async def run():
         statistics,
         utils.get_peer_id(entity),
         moderation_repository,
+        set(settings.ignored_channels),
     )
 
     async def publish_ai_approved(message_id, caption):

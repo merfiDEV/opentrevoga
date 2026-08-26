@@ -2,7 +2,7 @@ import html
 
 from telethon import events
 
-from trevoga.config import save_ai_model, save_watermark
+from trevoga.config import save_ai_model, save_ignored_channels, save_watermark
 from trevoga.handlers.context import HandlerContext
 from trevoga.services.text_cleaner import (
     clean_text,
@@ -17,6 +17,7 @@ HELP_TEXT = """<blockquote>=== КОМАНДЫ АДМИНИСТРАТОРА ===
 
 .ai | .ai on | .ai off | .ai status | .ai set [MODEL]
 .wmark | .wmark on | .wmark off
+.cignore [ID or @name] | .cignore off | .cignore list
 .fix | .fix short | .fix urgent | .fix official | .fix neutral
 .stats | .stats 12 | .stats 24
 .ai_reason [MESSAGE_ID] или ответом на сообщение
@@ -25,6 +26,40 @@ HELP_TEXT = """<blockquote>=== КОМАНДЫ АДМИНИСТРАТОРА ===
 
 
 def register(client, context: HandlerContext):
+    @client.on(
+        events.NewMessage(
+            chats=context.settings.group_c,
+            pattern=r"^\.cignore(?:\s+(.+))?\s*$",
+        )
+    )
+    async def channel_ignore(event):
+        if not context.is_admin(event.sender_id):
+            return
+        value = (event.pattern_match.group(1) or "").strip()
+        if not value or value.lower() == "list":
+            channels = sorted(context.ignored_channels)
+            response = "Игнорируемые каналы: " + (
+                ", ".join(map(str, channels)) if channels else "нет"
+            )
+        elif value.lower() == "off":
+            context.ignored_channels.clear()
+            save_ignored_channels(tuple())
+            response = "Игнорирование каналов выключено"
+        else:
+            try:
+                target = int(value) if value.lstrip("-").isdigit() else value
+                entity = await client.get_entity(target)
+                from telethon import utils
+
+                channel_id = utils.get_peer_id(entity)
+                context.ignored_channels.add(channel_id)
+                save_ignored_channels(tuple(sorted(context.ignored_channels)))
+                response = f"Канал добавлен в исключения: {channel_id}"
+            except Exception as error:
+                response = f"Не удалось найти канал: {html.escape(str(error))}"
+        await event.respond(f"<blockquote>{response}</blockquote>", parse_mode="html")
+        await event.delete()
+
     @client.on(events.NewMessage(pattern=r"^\.stat(?:s)?(?:\s+(\d+))?$"))
     async def stats(event):
         if not context.is_admin(event.sender_id):
