@@ -49,7 +49,11 @@ def photo_rules(assets_dir: Path):
         ),
         (("рсзв", "рсзо"), assets_dir / "rszo.jpg", "РСЗВ/РСЗО"),
         (("фпв", "fpv"), assets_dir / "fpv.jpg", "FPV"),
-        (("швидкісна",), assets_dir / "svidkisna.jpg", "Швидкісна ціль"),
+        (
+            ("швидкісна", "ракета", "ракети", "ракеті"),
+            assets_dir / "svidkisna.jpg",
+            "Швидкісна ціль",
+        ),
         (
             ("балістичн", "балістик", "балістичні", "балістична", "балістика"),
             assets_dir / "ballistika.jpg",
