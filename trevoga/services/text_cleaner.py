@@ -59,6 +59,16 @@ def photo_rules(assets_dir: Path):
             assets_dir / "ballistika.jpg",
             "Балістичні ракети",
         ),
+        (
+            ("молнія", "молния", "molniia", "molnia"),
+            assets_dir / "Molnia.png",
+            "Молнія",
+        ),
+        (
+            ("zala", "зала", "залі", "залы"),
+            assets_dir / "ZALA.png",
+            "ZALA",
+        ),
     ]
 
 
