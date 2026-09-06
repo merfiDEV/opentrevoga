@@ -11,6 +11,7 @@ class HandlerContext:
     statistics: object
     group_c_peer_id: int | None = None
     moderation_results: object | None = None
+    subscriptions: object | None = None
     ignored_channels: set[int] = field(default_factory=set)
 
     def is_admin(self, user_id: int | None) -> bool:

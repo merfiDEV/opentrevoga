@@ -88,6 +88,50 @@ class StatisticsRepository:
             )
 
 
+class SubscriptionRepository:
+    def __init__(self, database: Database):
+        self.database = database
+
+    def add(self, user_id: int, keyword: str) -> bool:
+        with self.database.connect() as connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO subscriptions VALUES (?, ?, ?)",
+                (user_id, keyword, time.time()),
+            )
+        return True
+
+    def remove(self, user_id: int, keyword: str) -> bool:
+        with self.database.connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM subscriptions WHERE user_id = ? AND keyword = ?",
+                (user_id, keyword),
+            )
+        return cursor.rowcount > 0
+
+    def list_for_user(self, user_id: int) -> list[str]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                "SELECT keyword FROM subscriptions WHERE user_id = ? ORDER BY keyword",
+                (user_id,),
+            ).fetchall()
+        return [row["keyword"] for row in rows]
+
+    def find_by_keyword(self, keyword: str) -> list[int]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                "SELECT user_id FROM subscriptions WHERE keyword = ?",
+                (keyword,),
+            ).fetchall()
+        return [row["user_id"] for row in rows]
+
+    def all_keywords(self) -> list[str]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                "SELECT DISTINCT keyword FROM subscriptions ORDER BY keyword"
+            ).fetchall()
+        return [row["keyword"] for row in rows]
+
+
 class ModerationRepository:
     def __init__(self, database: Database):
         self.database = database

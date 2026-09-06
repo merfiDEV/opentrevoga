@@ -28,6 +28,34 @@ def register(client, context: HandlerContext):
         await _forward_messages(event.messages, event.chat_id, client, context)
 
 
+async def _notify_subscribers(text, caption, messages, client, context: HandlerContext):
+    if not context.subscriptions:
+        return
+    lowered = text.lower()
+    notified = set()
+    for keyword in context.subscriptions.all_keywords():
+        if keyword in lowered:
+            for user_id in context.subscriptions.find_by_keyword(keyword):
+                if user_id in notified:
+                    continue
+                notified.add(user_id)
+                try:
+                    if any(item.media for item in messages):
+                        await client.send_file(
+                            user_id,
+                            [item.media for item in messages if item.media],
+                            caption=caption,
+                            parse_mode="html",
+                            link_preview=False,
+                        )
+                    else:
+                        await client.send_message(
+                            user_id, caption, parse_mode="html", link_preview=False
+                        )
+                except Exception:
+                    logger.exception("Failed to notify subscriber %s", user_id)
+
+
 async def _forward_messages(messages, chat_id, client, context: HandlerContext):
     message = messages[0]
     text = clean_text(next((item.raw_text for item in messages if item.raw_text), ""))
@@ -45,6 +73,7 @@ async def _forward_messages(messages, chat_id, client, context: HandlerContext):
         source=str(chat_id),
         keywords=detect_keywords(text, context.rules),
     )
+    await _notify_subscribers(text, caption, messages, client, context)
     try:
         if photos:
             sent = await client.send_file(

@@ -203,6 +203,38 @@ def register(client, context: HandlerContext):
             await event.respond(HELP_TEXT, parse_mode="html")
             await event.delete()
 
+    @client.on(events.NewMessage(pattern=r"^\.sub(?:\s+(.+))?\s*$"))
+    async def subscribe(event):
+        if event.sender_id is None:
+            return
+        value = (event.pattern_match.group(1) or "").strip().lower()
+        if not value:
+            keywords = context.subscriptions.list_for_user(event.sender_id)
+            text = (
+                "<blockquote>Ваши подписки: "
+                + (", ".join(html.escape(word) for word in keywords) if keywords else "нет")
+                + "</blockquote>"
+            )
+        else:
+            context.subscriptions.add(event.sender_id, value)
+            text = f"<blockquote>Подписка на «{html.escape(value)}» добавлена</blockquote>"
+        await event.respond(text, parse_mode="html")
+        await event.delete()
+
+    @client.on(events.NewMessage(pattern=r"^\.unsub(?:\s+(.+))?\s*$"))
+    async def unsubscribe(event):
+        if event.sender_id is None:
+            return
+        value = (event.pattern_match.group(1) or "").strip().lower()
+        if not value:
+            text = "<blockquote>Формат: .unsub СЛОВО</blockquote>"
+        elif context.subscriptions.remove(event.sender_id, value):
+            text = f"<blockquote>Подписка на «{html.escape(value)}» удалена</blockquote>"
+        else:
+            text = f"<blockquote>Подписка на «{html.escape(value)}» не найдена</blockquote>"
+        await event.respond(text, parse_mode="html")
+        await event.delete()
+
     @client.on(
         events.NewMessage(
             chats=context.settings.group_c, pattern=r"^\.ai_reason(?:\s+(\d+))?\s*$"

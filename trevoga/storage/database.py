@@ -40,5 +40,11 @@ class Database:
                     status TEXT NOT NULL,
                     created_at REAL NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS subscriptions (
+                    user_id INTEGER NOT NULL,
+                    keyword TEXT NOT NULL,
+                    created_at REAL NOT NULL,
+                    PRIMARY KEY (user_id, keyword)
+                );
                 """
             )
