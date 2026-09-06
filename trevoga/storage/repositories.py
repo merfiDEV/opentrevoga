@@ -108,6 +108,14 @@ class SubscriptionRepository:
             )
         return cursor.rowcount > 0
 
+    def remove_all(self, user_id: int) -> int:
+        with self.database.connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM subscriptions WHERE user_id = ?",
+                (user_id,),
+            )
+        return cursor.rowcount
+
     def list_for_user(self, user_id: int) -> list[str]:
         with self.database.connect() as connection:
             rows = connection.execute(

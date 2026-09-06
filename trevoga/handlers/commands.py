@@ -22,7 +22,13 @@ HELP_TEXT = """<blockquote>=== КОМАНДЫ АДМИНИСТРАТОРА ===
 .stats | .stats 12 | .stats 24
 .ai_reason [MESSAGE_ID] или ответом на сообщение
 .отмена | .delete | .удалить
-.help</blockquote>"""
+.help
+
+=== КОМАНДЫ ПОДПИСКИ ===
+
+.sub [СЛОВО] — подписаться на ключевое слово
+.unsub [СЛОВО] — отписаться от ключевого слова
+.unsub all — сбросить все подписки</blockquote>"""
 
 
 def register(client, context: HandlerContext):
@@ -199,15 +205,14 @@ def register(client, context: HandlerContext):
         events.NewMessage(chats=context.settings.group_c, pattern=r"^\.help\s*$")
     )
     async def help_command(event):
-        if context.is_admin(event.sender_id):
-            await event.respond(HELP_TEXT, parse_mode="html")
-            await event.delete()
+        await event.respond(HELP_TEXT, parse_mode="html")
+        await event.delete()
 
     @client.on(events.NewMessage(pattern=r"^\.sub(?:\s+(.+))?\s*$"))
     async def subscribe(event):
         if event.sender_id is None:
             return
-        value = (event.pattern_match.group(1) or "").strip().lower()
+        value = (event.pattern_match.group(1) or "").strip()
         if not value:
             keywords = context.subscriptions.list_for_user(event.sender_id)
             text = (
@@ -216,8 +221,9 @@ def register(client, context: HandlerContext):
                 + "</blockquote>"
             )
         else:
-            context.subscriptions.add(event.sender_id, value)
-            text = f"<blockquote>Подписка на «{html.escape(value)}» добавлена</blockquote>"
+            normalized = value.lower()
+            context.subscriptions.add(event.sender_id, normalized)
+            text = f"<blockquote>Подписка на «{html.escape(normalized)}» добавлена</blockquote>"
         await event.respond(text, parse_mode="html")
         await event.delete()
 
@@ -225,13 +231,18 @@ def register(client, context: HandlerContext):
     async def unsubscribe(event):
         if event.sender_id is None:
             return
-        value = (event.pattern_match.group(1) or "").strip().lower()
+        value = (event.pattern_match.group(1) or "").strip()
         if not value:
-            text = "<blockquote>Формат: .unsub СЛОВО</blockquote>"
-        elif context.subscriptions.remove(event.sender_id, value):
-            text = f"<blockquote>Подписка на «{html.escape(value)}» удалена</blockquote>"
+            text = "<blockquote>Формат: .unsub СЛОВО | .unsub all</blockquote>"
+        elif value.lower() == "all":
+            removed = context.subscriptions.remove_all(event.sender_id)
+            text = f"<blockquote>Сброшено подписок: {removed}</blockquote>"
         else:
-            text = f"<blockquote>Подписка на «{html.escape(value)}» не найдена</blockquote>"
+            normalized = value.lower()
+            if context.subscriptions.remove(event.sender_id, normalized):
+                text = f"<blockquote>Подписка на «{html.escape(normalized)}» удалена</blockquote>"
+            else:
+                text = f"<blockquote>Подписка на «{html.escape(normalized)}» не найдена</blockquote>"
         await event.respond(text, parse_mode="html")
         await event.delete()
 
