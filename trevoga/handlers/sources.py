@@ -40,10 +40,13 @@ async def _notify_subscribers(text, caption, messages, client, context: HandlerC
                     continue
                 notified.add(user_id)
                 try:
-                    if any(item.media for item in messages):
+                    media = [item.media for item in messages if item.media]
+                    if not media:
+                        media = matching_photos(text, context.rules)
+                    if media:
                         await client.send_file(
                             user_id,
-                            [item.media for item in messages if item.media],
+                            media,
                             caption=caption,
                             parse_mode="html",
                             link_preview=False,
