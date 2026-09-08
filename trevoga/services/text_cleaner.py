@@ -69,6 +69,11 @@ def photo_rules(assets_dir: Path):
             assets_dir / "ZALA.png",
             "ZALA",
         ),
+        (
+            ("арта", "артелирия", "артилерія"),
+            assets_dir / "arta.png",
+            "Арта/Артилерія",
+        ),
     ]
 
 
