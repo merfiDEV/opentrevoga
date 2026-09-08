@@ -3,7 +3,7 @@ import shutil
 from pathlib import Path
 
 
-async def apply_watermark(source: Path, output: Path, text: str = "@OpenTrevoga") -> None:
+async def apply_watermark(source: Path, output: Path, text: str = "#OpenTrevoga") -> None:
     """Накладывает текст внизу изображения через ffmpeg."""
     if not shutil.which("ffmpeg"):
         raise RuntimeError("ffmpeg is required for image watermarking")

@@ -3,7 +3,7 @@ from html import escape
 from pathlib import Path
 
 
-WATERMARK_TEXT = "OpenTrevoga 🕊"
+WATERMARK_TEXT = "#OpenTrevoga 🕊"
 WATERMARK_URL = "https://t.me/OpenTrevoga"
 _watermark_enabled = True
 EMOJI_PATTERN = re.compile(
