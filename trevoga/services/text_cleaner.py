@@ -41,45 +41,62 @@ def photo_rules(assets_dir: Path):
             ("бпла", "шахед", "шахеди", "шахеді", "реактивні"),
             assets_dir / "photo_2026-08-22_14-29-40.jpg",
             "БПЛА/Шахеди",
+            "https://uk.wikipedia.org/wiki/Безпілотний_літальний_апарат",
         ),
         (
             ("каб", "каби", "бандероль", "баражуючі боєприпаси"),
             assets_dir / "cab.jpg",
             "Каби",
+            "https://uk.wikipedia.org/wiki/Керована_авіаційна_бомба",
         ),
-        (("рсзв", "рсзо"), assets_dir / "rszo.jpg", "РСЗВ/РСЗО"),
-        (("фпв", "fpv"), assets_dir / "fpv.jpg", "FPV"),
+        (
+            ("рсзв", "рсзо"),
+            assets_dir / "rszo.jpg",
+            "РСЗВ/РСЗО",
+            "https://uk.wikipedia.org/wiki/Реактивна_система_залпового_вогню",
+        ),
+        (
+            ("фпв", "fpv"),
+            assets_dir / "fpv.jpg",
+            "FPV",
+            "https://uk.wikipedia.org/wiki/FPV-пілотування",
+        ),
         (
             ("швидкісна", "ракета", "ракети", "ракеті"),
             assets_dir / "svidkisna.jpg",
             "Швидкісна ціль",
+            "https://uk.wikipedia.org/wiki/Крилата_ракета",
         ),
         (
             ("балістичн", "балістик", "балістичні", "балістична", "балістика"),
             assets_dir / "ballistika.jpg",
             "Балістичні ракети",
+            "https://uk.wikipedia.org/wiki/Балістична_ракета",
         ),
         (
             ("молнія", "молния", "molniia", "molnia"),
             assets_dir / "Molnia.png",
             "Молнія",
+            "https://uk.wikipedia.org/wiki/Молнія_(БпЛА)",
         ),
         (
             ("zala", "зала", "залі", "залы"),
             assets_dir / "ZALA.png",
             "ZALA",
+            "https://uk.wikipedia.org/wiki/Ланцет_(баражуючий_боєприпас)",
         ),
         (
             ("арта", "артелирия", "артилерія"),
             assets_dir / "arta.png",
             "Арта/Артилерія",
+            "https://uk.wikipedia.org/wiki/Артилерія",
         ),
     ]
 
 
 def _keyword_pattern(rules) -> re.Pattern:
     keywords = sorted(
-        {keyword for values, _, _ in rules for keyword in values}, key=len, reverse=True
+        {keyword for values, _, _, _ in rules for keyword in values}, key=len, reverse=True
     )
     return re.compile(
         r"(?<![\w-])(" + "|".join(re.escape(word) for word in keywords) + r")(?![\w-])",
@@ -120,7 +137,7 @@ def detect_keywords(text: str, rules) -> list[str]:
     lowered = text.lower()
     return [
         label
-        for keywords, _, label in rules
+        for keywords, _, label, _ in rules
         if any(word in lowered for word in keywords)
     ]
 
@@ -129,6 +146,16 @@ def matching_photos(text: str, rules) -> list[Path]:
     lowered = text.lower()
     return [
         path
-        for keywords, path, _ in rules
+        for keywords, path, _, _ in rules
         if any(word in lowered for word in keywords) and path.exists()
+    ]
+
+
+def label_links(text: str, rules) -> list[str]:
+    """Возвращает HTML-ссылки на Википедию для совпавших ключевых слов."""
+    lowered = text.lower()
+    return [
+        f'<a href="{url}">{label}</a>'
+        for keywords, _, label, url in rules
+        if any(word in lowered for word in keywords) and url
     ]

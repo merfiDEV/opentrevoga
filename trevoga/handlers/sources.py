@@ -7,6 +7,7 @@ from trevoga.services.text_cleaner import (
     clean_text,
     detect_keywords,
     format_post_html,
+    label_links,
     matching_photos,
     watermark,
 )
@@ -64,9 +65,15 @@ async def _forward_messages(messages, chat_id, client, context: HandlerContext):
     text = clean_text(next((item.raw_text for item in messages if item.raw_text), ""))
     body = format_post_html(text, context.rules)
     photos = matching_photos(text, context.rules)
+    links = label_links(text, context.rules)
+    links_html = "\n".join(links)
     caption = (
-        f"{body}\n\n{watermark()}"
+        f"{body}\n\n{links_html}\n\n{watermark()}"
+        if body and links_html
+        else f"{body}\n\n{watermark()}"
         if body
+        else f"{links_html}\n\n{watermark()}"
+        if links_html and (photos or any(item.media for item in messages))
         else watermark()
         if photos or any(item.media for item in messages)
         else ""

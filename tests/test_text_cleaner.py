@@ -3,7 +3,14 @@ from pathlib import Path
 from trevoga.services.text_cleaner import clean_text, detect_keywords, format_post_html
 
 
-RULES = [(("бпла",), Path("missing.jpg"), "БПЛА/Шахеди")]
+RULES = [
+    (
+        ("бпла",),
+        Path("missing.jpg"),
+        "БПЛА/Шахеди",
+        "https://uk.wikipedia.org/wiki/Безпілотний_літальний_апарат",
+    )
+]
 
 
 def test_clean_text_removes_links_and_watermark():
