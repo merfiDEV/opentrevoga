@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 WATERMARK_TEXT = "OpenTrevoga 🕊"
-WATERMARK_URL = "https://telegra.ph/OpenTrevoga---trivogi-bez-shumu-08-24"
+WATERMARK_URL = "https://t.me/OpenTrevoga"
 _watermark_enabled = True
 EMOJI_PATTERN = re.compile(
     "["
