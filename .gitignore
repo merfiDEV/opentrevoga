@@ -1,8 +1,0 @@
-.env
-session.session
-session.session-journal
-stats.json
-trevoga.db
-__pycache__/
-venv/
-*.zip
