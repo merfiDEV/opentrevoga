@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite3
+*.session
+*.session-journal
+*.zip
+.env
+venv/
+stats.json
+.pytest_cache/
+.ruff_cache/
