@@ -356,7 +356,7 @@ async def test_autocheck_message_edits_when_enabled():
     moderation = FakeModeration(fixed="Офіційний текст")
     context = build_context(client=client, moderation=moderation)
     context.fixer.autocheck_enabled = True
-    await sources._autocheck_message(client, context, 5, "якийсь текст")
+    await sources._autocheck_message(client, context, 5, "текст про бпла")
     assert moderation.calls and moderation.calls[0][1] == "official"
     assert client.edits and client.edits[0][0] == 5
     assert "Офіційний текст" in client.edits[0][1]
@@ -371,6 +371,27 @@ async def test_autocheck_message_skips_when_disabled():
     await sources._autocheck_message(client, context, 5, "якийсь текст")
     assert not moderation.calls
     assert not client.edits
+
+
+@pytest.mark.asyncio
+async def test_autocheck_keeps_wiki_links():
+    client = FakeEditClient()
+    moderation = FakeModeration(fixed="Офіційний текст про бпла")
+    rules = [
+        (
+            ("бпла",),
+            None,
+            "БПЛА/Шахеди",
+            "https://uk.wikipedia.org/wiki/БпЛА",
+        ),
+    ]
+    context = build_context(client=client, moderation=moderation, rules=rules)
+    context.fixer.autocheck_enabled = True
+    await sources._autocheck_message(client, context, 5, "текст про бпла")
+    assert client.edits
+    edited = client.edits[0][1]
+    assert "uk.wikipedia.org" in edited
+    assert "БПЛА/Шахеди" in edited
 
 
 @pytest.mark.asyncio

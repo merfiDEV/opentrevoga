@@ -77,16 +77,21 @@ async def _notify_subscribers(text, caption, messages, client, context: HandlerC
                     logger.exception("Failed to notify subscriber %s", user_id)
 
 
-async def _autocheck_message(client, context: HandlerContext, message_id: int, caption: str):
+async def _autocheck_message(client, context: HandlerContext, message_id: int, text: str):
     if not context.fixer or not context.fixer.autocheck_enabled:
         return
-    text = clean_text(caption)
-    fixed = await context.fixer.autocheck(text)
-    if not fixed or fixed.strip() == text.strip():
+    # text — уже очищенное тело поста (без вики-ссылок и вотермарки).
+    # После редактуры пересобираем caption целиком: body + label_links + watermark,
+    # иначе блок вики-ссылок потеряется.
+    source = clean_text(text)
+    fixed = await context.fixer.autocheck(source)
+    if not fixed or fixed.strip() == source.strip():
         return
     body = format_post_html(fixed, context.rules)
+    links_html = "\n".join(label_links(fixed, context.rules))
     mark = watermark()
-    edited = f"{body}\n\n{mark}" if mark else body
+    parts = [part for part in (body, links_html, mark) if part]
+    edited = "\n\n".join(parts)
     try:
         await client.edit_message(
             context.settings.group_c,
@@ -153,7 +158,7 @@ async def _forward_messages(messages, chat_id, client, context: HandlerContext):
         sent_message = sent[0] if isinstance(sent, list) else sent
         context.moderation.schedule_check(sent_message.id, text, caption)
         context.moderation.schedule(
-            _autocheck_message(client, context, sent_message.id, caption)
+            _autocheck_message(client, context, sent_message.id, text)
         )
     except Exception:
         logger.exception("Failed to publish source message %s", message.id)
