@@ -1,0 +1,88 @@
+import logging
+import time
+from collections import OrderedDict
+
+from trevoga.services.moderation import FIX_MODES, sanitize_instruction
+
+
+logger = logging.getLogger(__name__)
+
+CAPTION_LIMIT = 1024
+TEXT_LIMIT = 4096
+UNDO_TTL = 600.0
+UNDO_MAX = 100
+
+RESULT_OK = "ok"
+RESULT_UNCHANGED = "unchanged"
+RESULT_ERROR = "error"
+RESULT_TOO_LONG = "too_long"
+
+
+class FixOutcome:
+    def __init__(self, status, text="", mode="default", instruction="", error=""):
+        self.status = status
+        self.text = text
+        self.mode = mode
+        self.instruction = instruction
+        self.error = error
+
+
+class FixService:
+    """Редактирование постов через AI-редактор с превью и откатом."""
+
+    def __init__(self, moderation, *, caption_limit=CAPTION_LIMIT, text_limit=TEXT_LIMIT):
+        self.moderation = moderation
+        self.caption_limit = caption_limit
+        self.text_limit = text_limit
+        self._undo = OrderedDict()
+
+    def parse_args(self, raw: str) -> tuple[str, str, bool]:
+        """Возвращает (mode, instruction, preview)."""
+        tokens = raw.split()
+        if not tokens:
+            return "default", "", False
+        preview = False
+        mode = "default"
+        while tokens and tokens[0].lower() == "test":
+            preview = True
+            tokens.pop(0)
+        if tokens and tokens[0].lower() in FIX_MODES:
+            mode = tokens.pop(0).lower()
+        while tokens and tokens[-1].lower() == "test":
+            preview = True
+            tokens.pop()
+        instruction = sanitize_instruction(" ".join(tokens))
+        return mode, instruction, preview
+
+    async def run(self, original: str, mode: str, instruction: str) -> FixOutcome:
+        if not original.strip():
+            return FixOutcome(RESULT_ERROR, mode=mode, instruction=instruction)
+        try:
+            fixed = await self.moderation.fix(original, mode, instruction)
+        except Exception as error:  # pragma: no cover - defensive
+            logger.exception("Fix service failed")
+            return FixOutcome(RESULT_ERROR, mode=mode, instruction=instruction, error=str(error))
+        if not fixed or not fixed.strip():
+            return FixOutcome(RESULT_ERROR, mode=mode, instruction=instruction)
+        fixed = fixed.strip()
+        if fixed == original.strip():
+            return FixOutcome(RESULT_UNCHANGED, text=original, mode=mode, instruction=instruction)
+        return FixOutcome(RESULT_OK, text=fixed, mode=mode, instruction=instruction)
+
+    def limits_for(self, reply) -> int:
+        return self.caption_limit if getattr(reply, "media", None) else self.text_limit
+
+    def remember(self, message_id: int, text: str) -> None:
+        self._undo[message_id] = (time.monotonic(), text)
+        self._undo.move_to_end(message_id)
+        while len(self._undo) > UNDO_MAX:
+            self._undo.popitem(last=False)
+
+    def pop_undo(self, message_id: int) -> str | None:
+        entry = self._undo.pop(message_id, None)
+        if not entry:
+            return None
+        saved_at, text = entry
+        if time.monotonic() - saved_at > UNDO_TTL:
+            return None
+        return text

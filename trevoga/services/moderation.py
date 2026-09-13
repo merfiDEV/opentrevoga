@@ -34,6 +34,40 @@ FIX_PROMPTS = {
     "official": FIX_PROMPT + " Використовуй сухий офіційний стиль без емоцій.",
     "neutral": FIX_PROMPT + " Використовуй нейтральний інформаційний стиль.",
 }
+FIX_MODES = tuple(FIX_PROMPTS)
+FIX_INSTRUCTION_LIMIT = 200
+FIX_INSTRUCTION_BANNED = (
+    "не меняй",
+    "не змінюй",
+    "верни как есть",
+    "поверни як є",
+    "не редактируй",
+    "не виправляй",
+    "ignore",
+    "system:",
+    "assistant:",
+)
+
+
+def sanitize_instruction(text: str | None) -> str:
+    """Одна строка, cap длины, отбрасывание попыток отменить редактирование."""
+    if not text:
+        return ""
+    normalized = " ".join(text.split())[:FIX_INSTRUCTION_LIMIT].strip()
+    lowered = normalized.lower()
+    if any(banned in lowered for banned in FIX_INSTRUCTION_BANNED):
+        return ""
+    return normalized
+
+
+def build_fix_prompt(mode: str, instruction: str | None = None) -> str:
+    base = FIX_PROMPTS.get(mode, FIX_PROMPTS["default"])
+    clean_instruction = sanitize_instruction(instruction)
+    if clean_instruction:
+        return base + "\n\nДодаткова інструкція редактора: " + clean_instruction
+    return base
+
+
 YES_RE = re.compile(r"\b(ДА|ТАК|YES|TRUE)\b")
 NO_RE = re.compile(r"\b(НЕТ|НІ|NO|FALSE)\b")
 
@@ -134,9 +168,14 @@ class ModerationService:
         client.model = model
         return True
 
-    async def fix(self, text: str, mode: str = "default") -> str | None:
+    async def fix(
+        self,
+        text: str,
+        mode: str = "default",
+        instruction: str | None = None,
+    ) -> str | None:
         try:
-            prompt = FIX_PROMPTS.get(mode, FIX_PROMPTS["default"])
+            prompt = build_fix_prompt(mode, instruction)
             return await self.fix_client.complete(prompt, text, temperature=0.3) or None
         except Exception:
             logger.exception("AI text correction failed")

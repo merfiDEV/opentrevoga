@@ -13,6 +13,7 @@ class HandlerContext:
     moderation_results: object | None = None
     subscriptions: object | None = None
     ignored_channels: set[int] = field(default_factory=set)
+    fixer: object | None = None
 
     def is_admin(self, user_id: int | None) -> bool:
         return user_id in self.settings.admin_ids

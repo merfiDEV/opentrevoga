@@ -2,6 +2,7 @@ import pytest
 
 from trevoga.handlers import commands, comments
 from trevoga.handlers.context import HandlerContext
+from trevoga.services.fix_service import FixService
 
 
 class FakeClient:
@@ -85,12 +86,18 @@ class FakeSubscriptions:
 
 
 class FakeModeration:
-    def __init__(self):
+    def __init__(self, fixed=None):
         self.enabled = False
+        self.fixed = fixed
+        self.calls = []
 
     async def enable(self):
         self.enabled = True
         return True, "ok"
+
+    async def fix(self, text, mode="default", instruction=None):
+        self.calls.append((text, mode, instruction))
+        return self.fixed
 
     def status_text(self):
         return f"AI: {self.enabled}"
@@ -105,17 +112,19 @@ class FakeStatistics:
 
 
 def build_context(**overrides):
+    moderation = overrides.get("moderation") or FakeModeration()
     defaults = dict(
         client=None,
         settings=FakeSettings(),
         rules=[],
         publisher=None,
-        moderation=FakeModeration(),
+        moderation=moderation,
         statistics=FakeStatistics(),
         group_c_peer_id=-1,
         moderation_results=None,
         subscriptions=FakeSubscriptions(),
         ignored_channels=set(),
+        fixer=FixService(moderation),
     )
     defaults.update(overrides)
     return HandlerContext(**defaults)
@@ -165,6 +174,44 @@ class FakeReplyMessage(FakeMessage):
         self.media = None
 
 
+class FakeFixMessage(FakeMessage):
+    def __init__(self, message_id, text, media=None, reply=None):
+        super().__init__(message_id)
+        self.raw_text = text
+        self.media = media
+        self._reply = reply
+
+    async def get_reply_message(self):
+        return self._reply
+
+
+class FakeFixEvent(FakeEvent):
+    def __init__(self, text, reply=None, sender_id=1, groups=None):
+        argument = text.strip().split(maxsplit=1)
+        groups = groups if groups is not None else [argument[1] if len(argument) > 1 else None]
+        super().__init__(text=text, sender_id=sender_id, pattern_groups=groups)
+        self.message = FakeFixMessage(99, text, reply=reply)
+        self.message.is_reply = reply is not None
+        self.edits = []
+
+    async def delete(self):
+        return None
+
+
+class FakeEditClient(FakeClient):
+    def __init__(self):
+        super().__init__()
+        self.edits = []
+
+    async def edit_message(self, chat, message_id, text, **kwargs):
+        self.edits.append((message_id, text))
+        return None
+
+
+def fix_handler(client):
+    return next(h for h in client.handlers if h.__name__ == "fix")
+
+
 class FakeCommentEvent(FakeEvent):
     def __init__(self, text, reply):
         super().__init__(text=text)
@@ -207,3 +254,107 @@ async def test_subscribe_adds_keyword():
     event = FakeEvent(pattern_groups=["БПЛА"])
     await handler(event)
     assert "бпла" in subscriptions.list_for_user(1)
+
+
+@pytest.mark.asyncio
+async def test_fix_without_reply_reports_usage():
+    client = FakeEditClient()
+    context = build_context(client=client)
+    commands.register(client, context)
+    event = FakeFixEvent(".fix short", reply=None)
+    await fix_handler(client)(event)
+    assert event.responses and "Ответьте" in event.responses[0]
+    assert not client.edits
+
+
+@pytest.mark.asyncio
+async def test_fix_edits_reply_in_mode():
+    client = FakeEditClient()
+    moderation = FakeModeration(fixed="Виправлений текст")
+    context = build_context(client=client, moderation=moderation)
+    commands.register(client, context)
+    reply = FakeReplyMessage(7, "исходный текст")
+    event = FakeFixEvent(".fix short", reply=reply)
+    await fix_handler(client)(event)
+    assert moderation.calls == [("исходный текст", "short", "")]
+    assert client.edits and client.edits[0][0] == 7
+    assert any("Исправлено" in text for text in event.responses)
+
+
+@pytest.mark.asyncio
+async def test_fix_custom_instruction_is_forwarded():
+    client = FakeEditClient()
+    moderation = FakeModeration(fixed="Новый текст")
+    context = build_context(client=client, moderation=moderation)
+    commands.register(client, context)
+    reply = FakeReplyMessage(7, "текст с матом")
+    event = FakeFixEvent(".fix убери мат", reply=reply)
+    await fix_handler(client)(event)
+    assert moderation.calls[0][2] == "убери мат"
+    assert moderation.calls[0][1] == "default"
+    assert client.edits
+
+
+@pytest.mark.asyncio
+async def test_fix_test_mode_does_not_edit():
+    client = FakeEditClient()
+    moderation = FakeModeration(fixed="Предпросмотр")
+    context = build_context(client=client, moderation=moderation)
+    commands.register(client, context)
+    reply = FakeReplyMessage(7, "исходник")
+    event = FakeFixEvent(".fix test", reply=reply)
+    await fix_handler(client)(event)
+    assert not client.edits
+    assert any("Предпросмотр" in text for text in event.responses)
+
+
+@pytest.mark.asyncio
+async def test_fix_reports_when_ai_unavailable():
+    client = FakeEditClient()
+    moderation = FakeModeration(fixed=None)
+    context = build_context(client=client, moderation=moderation)
+    commands.register(client, context)
+    reply = FakeReplyMessage(7, "исходник")
+    event = FakeFixEvent(".fix", reply=reply)
+    await fix_handler(client)(event)
+    assert not client.edits
+    assert any("недоступен" in text for text in event.responses)
+
+
+@pytest.mark.asyncio
+async def test_fix_unchanged_reports_no_changes():
+    client = FakeEditClient()
+    moderation = FakeModeration(fixed="исходник")
+    context = build_context(client=client, moderation=moderation)
+    commands.register(client, context)
+    reply = FakeReplyMessage(7, "исходник")
+    event = FakeFixEvent(".fix", reply=reply)
+    await fix_handler(client)(event)
+    assert not client.edits
+    assert any("изменений нет" in text for text in event.responses)
+
+
+@pytest.mark.asyncio
+async def test_fix_undo_restores_original():
+    client = FakeEditClient()
+    moderation = FakeModeration(fixed="Правка")
+    context = build_context(client=client, moderation=moderation)
+    commands.register(client, context)
+    reply = FakeReplyMessage(7, "оригинал")
+    handler = fix_handler(client)
+    await handler(FakeFixEvent(".fix", reply=reply))
+    assert client.edits
+    client.edits.clear()
+    await handler(FakeFixEvent(".fix undo", reply=reply))
+    assert client.edits and client.edits[0][0] == 7
+    assert "оригинал" in client.edits[0][1]
+
+
+@pytest.mark.asyncio
+async def test_fix_help_lists_custom_request():
+    client = FakeEditClient()
+    context = build_context(client=client)
+    commands.register(client, context)
+    event = FakeFixEvent(".fix help")
+    await fix_handler(client)(event)
+    assert any("просьба" in text for text in event.responses)

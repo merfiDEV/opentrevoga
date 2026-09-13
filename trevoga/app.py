@@ -13,6 +13,7 @@ from trevoga.handlers.reactions import register as register_reactions
 from trevoga.handlers.sources import register as register_sources
 from trevoga.integrations.ai_client import AIClient
 from trevoga.integrations.telegram import create_client
+from trevoga.services.fix_service import FixService
 from trevoga.services.moderation import ModerationService
 from trevoga.services.publishing import PublishingService
 from trevoga.services.statistics import StatisticsService
@@ -64,6 +65,7 @@ async def run():
                 "AI_MODE is enabled in configuration, but AI is unavailable: %s",
                 response,
             )
+    fixer = FixService(moderation)
     publisher = PublishingService(client, settings, posts, stats_repository)
     await client.start()
     await publisher.validate_channel_targets()
@@ -79,6 +81,7 @@ async def run():
         moderation_repository,
         subscription_repository,
         set(settings.ignored_channels),
+        fixer,
     )
 
     async def publish_ai_approved(message_id, caption):

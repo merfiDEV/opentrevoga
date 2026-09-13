@@ -4,10 +4,17 @@ from telethon import events
 
 from trevoga.config import save_ai_model, save_ignored_channels, save_watermark
 from trevoga.handlers.context import HandlerContext
+from trevoga.services.fix_service import (
+    RESULT_ERROR,
+    RESULT_OK,
+    RESULT_TOO_LONG,
+    RESULT_UNCHANGED,
+)
 from trevoga.services.text_cleaner import (
     clean_text,
     format_post_html,
     is_watermark_enabled,
+    quote_html,
     set_watermark,
     watermark,
 )
@@ -18,7 +25,7 @@ HELP_TEXT = """<blockquote>=== КОМАНДЫ АДМИНИСТРАТОРА ===
 .ai | .ai on | .ai off | .ai status | .ai set [MODEL]
 .wmark | .wmark on | .wmark off
 .cignore [ID or @name] | .cignore off | .cignore list
-.fix | .fix short | .fix urgent | .fix official | .fix neutral
+.fix [short|urgent|official|neutral] | .fix test | .fix <просьба> | .fix undo | .fix help
 .stats | .stats 12 | .stats 24
 .ai_reason [MESSAGE_ID] или ответом на сообщение
 .отмена | .delete | .удалить
@@ -29,6 +36,90 @@ HELP_TEXT = """<blockquote>=== КОМАНДЫ АДМИНИСТРАТОРА ===
 .sub [СЛОВО] — подписаться на ключевое слово
 .unsub [СЛОВО] — отписаться от ключевого слова
 .unsub all — сбросить все подписки</blockquote>"""
+
+
+FIX_HELP = """<blockquote>=== .fix ===
+.fix — отредактировать ответом (режим default)
+.fix short|urgent|official|neutral — стиль редактуры
+.fix test [режим] [просьба] — показать результат, не меняя пост
+.fix [просьба] — своя инструкция редактору (напр. «убери мат»)
+.fix undo — вернуть исходный текст (в течение 10 минут)
+.fix help — эта справка</blockquote>"""
+
+
+async def _undo_fix(client, context, event):
+    if not event.message.is_reply:
+        await event.respond(
+            "<blockquote>⚠️ Ответьте .fix undo на отредактированное сообщение.</blockquote>",
+            parse_mode="html",
+        )
+        await event.delete()
+        return
+    reply = await event.message.get_reply_message()
+    saved = context.fixer.pop_undo(reply.id) if reply else None
+    if saved is None:
+        await event.respond(
+            "<blockquote>ℹ️ Нет сохранённой версии для отката (или истёк срок).</blockquote>",
+            parse_mode="html",
+        )
+        await event.delete()
+        return
+    restored = f"{format_post_html(saved, context.rules)}"
+    mark = watermark()
+    full = f"{restored}\n\n{mark}" if mark else restored
+    try:
+        await client.edit_message(
+            context.settings.group_c,
+            reply.id,
+            full,
+            parse_mode="html",
+            link_preview=False,
+        )
+        await event.respond(
+            "<blockquote>↩️ Восстановлен исходный текст.</blockquote>",
+            parse_mode="html",
+        )
+    except Exception as error:
+        await event.respond(
+            f"<blockquote>⚠️ Не удалось откатить: {html.escape(str(error))}</blockquote>",
+            parse_mode="html",
+        )
+    await event.delete()
+
+
+async def _render_fix_outcome(
+    client, context, event, reply, original, mode, outcome, preview
+):
+    if outcome.status == RESULT_ERROR:
+        detail = f": {html.escape(outcome.error)}" if outcome.error else ""
+        return f"<blockquote>⚠️ AI-редактор недоступен{detail}</blockquote>"
+    if outcome.status == RESULT_UNCHANGED:
+        return "<blockquote>ℹ️ Текст уже в порядке, изменений нет.</blockquote>"
+    if outcome.status == RESULT_TOO_LONG:
+        return "<blockquote>⚠️ Результат слишком длинный для этого сообщения.</blockquote>"
+    limit = context.fixer.limits_for(reply)
+    rendered = f"{format_post_html(outcome.text, context.rules)}"
+    mark = watermark()
+    full = f"{rendered}\n\n{mark}" if mark else rendered
+    if len(full) > limit:
+        return (
+            "<blockquote>⚠️ Результат не влезает в лимит сообщения "
+            f"({len(full)}/{limit}). Попробуйте .fix test.</blockquote>"
+        )
+    if preview:
+        return f"<blockquote>🔎 Предпросмотр ({html.escape(mode)}):</blockquote>{full}"
+    context.fixer.remember(reply.id, original)
+    try:
+        await client.edit_message(
+            context.settings.group_c,
+            reply.id,
+            full,
+            parse_mode="html",
+            link_preview=False,
+        )
+    except Exception as error:
+        return f"<blockquote>⚠️ Не удалось изменить пост: {html.escape(str(error))}</blockquote>"
+    return f"<blockquote>✅ Исправлено (режим: {html.escape(mode)})</blockquote>"
 
 
 def register(client, context: HandlerContext):
@@ -176,30 +267,44 @@ def register(client, context: HandlerContext):
 
     @client.on(
         events.NewMessage(
-            chats=context.settings.group_c,
-            pattern=r"^\.fix(?:\s+(short|urgent|official|neutral))?\s*$",
+            chats=context.settings.group_c, pattern=r"^\.fix(?:\s+(.+))?\s*$"
         )
     )
     async def fix(event):
         if not context.is_admin(event.sender_id):
             return
+        argument = (event.pattern_match.group(1) or "").strip()
+        if argument.lower() in {"help", "?"}:
+            await event.respond(FIX_HELP, parse_mode="html")
+            await event.delete()
+            return
+        if argument.lower() == "undo":
+            await _undo_fix(client, context, event)
+            return
         if not event.message.is_reply:
-            await event.message.delete()
+            await event.respond(
+                "<blockquote>⚠️ Ответьте командой .fix на сообщение, которое нужно отредактировать.</blockquote>",
+                parse_mode="html",
+            )
+            await event.delete()
             return
         reply = await event.message.get_reply_message()
-        original = clean_text(reply.raw_text or "") if reply else ""
-        mode = (event.message.raw_text or "").strip().split(maxsplit=1)
-        fix_mode = mode[1].lower() if len(mode) > 1 else "default"
-        fixed = await context.moderation.fix(original, fix_mode) if original else None
-        if fixed and fixed.strip() != original.strip():
-            await client.edit_message(
-                context.settings.group_c,
-                reply.id,
-                f"{format_post_html(fixed, context.rules)}\n\n{watermark()}",
+        if reply is None:
+            await event.respond(
+                "<blockquote>⚠️ Не удалось получить исходное сообщение.</blockquote>",
                 parse_mode="html",
-                link_preview=False,
             )
-        await event.message.delete()
+            await event.delete()
+            return
+        original = clean_text(reply.raw_text or "")
+        mode, instruction, preview = context.fixer.parse_args(argument)
+        outcome = await context.fixer.run(original, mode, instruction)
+        status = await _render_fix_outcome(
+            client, context, event, reply, original, mode, outcome, preview
+        )
+        if status:
+            await event.respond(status, parse_mode="html")
+        await event.delete()
 
     @client.on(
         events.NewMessage(chats=context.settings.group_c, pattern=r"^\.help\s*$")
