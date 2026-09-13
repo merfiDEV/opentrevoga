@@ -173,5 +173,5 @@ async def _check_task(msg_id, text, html_caption):
 
         if _forward:
             await _forward(msg)
-    except Exception as e:
+    except Exception:
         logger.exception("AI check error for message %s", msg_id)

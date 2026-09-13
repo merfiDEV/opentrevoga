@@ -1,5 +1,7 @@
+import asyncio
 import logging
 
+from telethon.errors import FloodWaitError
 from telethon.tl.types import Channel
 
 from trevoga.config import Settings
@@ -23,16 +25,28 @@ class PublishingService:
         self.stats = stats
         self._valid_channel_targets = tuple(settings.channel_targets)
 
+    async def _with_flood_wait(self, factory):
+        """Run a Telegram call, waiting out FloodWait errors."""
+        while True:
+            try:
+                return await factory()
+            except FloodWaitError as error:
+                logger.warning("FloodWait: sleeping %s seconds", error.seconds)
+                await asyncio.sleep(error.seconds)
+
     async def forward_to_targets(self, message) -> dict[str, int]:
         messages = message if isinstance(message, list) else [message]
         primary = messages[0]
         references = {}
+
+        async def forward(target):
+            if len(messages) == 1:
+                return await primary.forward_to(target)
+            return await self.client.forward_messages(target, messages)
+
         for target in self.settings.group_d_targets:
             try:
-                if len(messages) == 1:
-                    forwarded = await primary.forward_to(target)
-                else:
-                    forwarded = await self.client.forward_messages(target, messages)
+                forwarded = await self._with_flood_wait(lambda t=target: forward(t))
                 forwarded = forwarded if isinstance(forwarded, list) else [forwarded]
                 references[str(target)] = forwarded[0].id
             except Exception:
@@ -41,7 +55,9 @@ class PublishingService:
                 )
         for target in self._valid_channel_targets:
             try:
-                sent = await self._send_to_channel(target, messages)
+                sent = await self._with_flood_wait(
+                    lambda t=target: self._send_to_channel(t, messages)
+                )
                 references[str(target)] = sent[0].id
             except Exception:
                 logger.exception(

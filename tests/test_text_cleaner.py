@@ -14,7 +14,7 @@ RULES = [
 
 
 def test_clean_text_removes_links_and_watermark():
-    assert clean_text("Новина 🛰\nhttps://example.com\nOpenTrevoga 🕊") == "Новина"
+    assert clean_text("Новина 🛰\nhttps://example.com\n#OpenTrevoga 🕊") == "Новина"
 
 
 def test_format_post_highlights_keywords_and_escapes_html():

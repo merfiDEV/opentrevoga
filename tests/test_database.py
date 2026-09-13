@@ -1,4 +1,4 @@
-from trevoga.storage.database import Database
+from trevoga.storage.database import MIGRATIONS, Database
 from trevoga.storage.repositories import ForwardedPostRepository, StatisticsRepository
 from trevoga.models import ModerationResult
 from trevoga.storage.repositories import ModerationRepository
@@ -14,6 +14,15 @@ def test_forwarded_messages_and_statistics(tmp_path):
     stats = StatisticsRepository(database)
     stats.record("to_c", keywords=["FPV"])
     assert stats.keyword_counts(24)["FPV"] == 1
+
+
+def test_initialize_is_idempotent_and_sets_version(tmp_path):
+    database = Database(tmp_path / "migrations.db")
+    database.initialize()
+    database.initialize()
+    with database.connect() as connection:
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+    assert version == len(MIGRATIONS)
 
 
 def test_moderation_result_is_persisted(tmp_path):

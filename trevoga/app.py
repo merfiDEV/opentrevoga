@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 
 from telethon import utils
@@ -111,11 +112,30 @@ async def run():
     register_comments(client, context)
     register_reactions(client, context)
     register_commands(client, context)
-    asyncio.create_task(_cleanup_loop(stats_repository))
-    await client.run_until_disconnected()
+    cleanup_task = asyncio.create_task(_cleanup_loop(stats_repository))
+    try:
+        await client.run_until_disconnected()
+    finally:
+        cleanup_task.cancel()
+        await _drain_tasks(cleanup_task)
+        await moderation.drain()
+        await moderation.aclose()
+        await client.disconnect()
 
 
 async def _cleanup_loop(repository):
     while True:
         await asyncio.sleep(1800)
-        repository.cleanup()
+        try:
+            repository.cleanup()
+        except Exception:
+            logging.getLogger(__name__).exception("Statistics cleanup failed")
+
+
+async def _drain_tasks(*tasks) -> None:
+    for task in tasks:
+        if task is None:
+            continue
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task

@@ -147,6 +147,17 @@ class ModerationService:
         self.tasks.add(task)
         task.add_done_callback(self.tasks.discard)
 
+    async def drain(self) -> None:
+        """Wait for in-flight moderation checks before shutting down."""
+        while self.tasks:
+            pending = list(self.tasks)
+            await asyncio.gather(*pending, return_exceptions=True)
+
+    async def aclose(self) -> None:
+        """Release HTTP resources held by the AI clients."""
+        await self.client.aclose()
+        await self.fix_client.aclose()
+
     def schedule_check(self, message_id: int, text: str, caption: str) -> None:
         if not self.enabled or not text.strip() or not caption:
             return

@@ -61,6 +61,6 @@ async def fix_text(text):
             data = resp.json()
         content = data["choices"][0]["message"]["content"]
         return (content or "").strip() or None
-    except Exception as e:
+    except Exception:
         logger.exception("AI fix error")
         return None

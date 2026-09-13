@@ -2,6 +2,44 @@ import sqlite3
 from pathlib import Path
 
 
+MIGRATIONS = [
+    # 1: initial schema
+    """
+    CREATE TABLE IF NOT EXISTS forwarded_messages (
+        source_message_id INTEGER NOT NULL,
+        target TEXT NOT NULL,
+        target_message_id INTEGER NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'main',
+        PRIMARY KEY (source_message_id, target, target_message_id)
+    );
+    CREATE TABLE IF NOT EXISTS statistics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind TEXT NOT NULL,
+        source TEXT,
+        keywords TEXT NOT NULL DEFAULT '[]',
+        message_id INTEGER,
+        created_at REAL NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS moderation_results (
+        message_id INTEGER PRIMARY KEY,
+        useful INTEGER NOT NULL,
+        reason TEXT,
+        reason_text TEXT NOT NULL DEFAULT '',
+        confidence REAL,
+        raw_response TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL,
+        created_at REAL NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS subscriptions (
+        user_id INTEGER NOT NULL,
+        keyword TEXT NOT NULL,
+        created_at REAL NOT NULL,
+        PRIMARY KEY (user_id, keyword)
+    );
+    """,
+]
+
+
 class Database:
     def __init__(self, path: Path):
         self.path = path
@@ -13,38 +51,7 @@ class Database:
 
     def initialize(self) -> None:
         with self.connect() as connection:
-            connection.executescript(
-                """
-                CREATE TABLE IF NOT EXISTS forwarded_messages (
-                    source_message_id INTEGER NOT NULL,
-                    target TEXT NOT NULL,
-                    target_message_id INTEGER NOT NULL,
-                    kind TEXT NOT NULL DEFAULT 'main',
-                    PRIMARY KEY (source_message_id, target, target_message_id)
-                );
-                CREATE TABLE IF NOT EXISTS statistics (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    kind TEXT NOT NULL,
-                    source TEXT,
-                    keywords TEXT NOT NULL DEFAULT '[]',
-                    message_id INTEGER,
-                    created_at REAL NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS moderation_results (
-                    message_id INTEGER PRIMARY KEY,
-                    useful INTEGER NOT NULL,
-                    reason TEXT,
-                    reason_text TEXT NOT NULL DEFAULT '',
-                    confidence REAL,
-                    raw_response TEXT NOT NULL DEFAULT '',
-                    status TEXT NOT NULL,
-                    created_at REAL NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS subscriptions (
-                    user_id INTEGER NOT NULL,
-                    keyword TEXT NOT NULL,
-                    created_at REAL NOT NULL,
-                    PRIMARY KEY (user_id, keyword)
-                );
-                """
-            )
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+            for index, migration in enumerate(MIGRATIONS[version:], start=version + 1):
+                connection.executescript(migration)
+                connection.execute(f"PRAGMA user_version = {index}")

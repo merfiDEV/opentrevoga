@@ -1,10 +1,12 @@
-import uuid
+import asyncio
 import logging
+import uuid
 
 import httpx
 
 
 logger = logging.getLogger(__name__)
+RETRYABLE_STATUS = {408, 425, 429, 500, 502, 503, 504}
 
 
 class AIClient:
@@ -13,13 +15,68 @@ class AIClient:
         self.model = model
         self.api_key = api_key
         self.timeout = timeout
+        self._http: httpx.AsyncClient | None = None
+
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+
+    async def _client(self) -> httpx.AsyncClient:
+        if self._http is None:
+            self._http = await httpx.AsyncClient(
+                timeout=self.timeout
+            ).__aenter__()
+        return self._http
+
+    async def aclose(self) -> None:
+        if self._http is not None:
+            await self._http.aclose()
+            self._http = None
+
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: dict | None = None,
+        attempts: int = 3,
+    ) -> httpx.Response:
+        http = await self._client()
+        delay = 0.5
+        last_error: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                response = await http.request(
+                    method, f"{self.base_url}{path}", json=json, headers=self._headers()
+                )
+                if response.status_code in RETRYABLE_STATUS and attempt < attempts:
+                    raise httpx.HTTPStatusError(
+                        f"retryable status {response.status_code}",
+                        request=response.request,
+                        response=response,
+                    )
+                response.raise_for_status()
+                return response
+            except (httpx.TransportError, httpx.TimeoutException) as error:
+                last_error = error
+            except httpx.HTTPStatusError as error:
+                if error.response.status_code not in RETRYABLE_STATUS:
+                    raise
+                last_error = error
+            if attempt < attempts:
+                logger.warning(
+                    "AI request %s failed (attempt %s/%s): %s",
+                    path,
+                    attempt,
+                    attempts,
+                    last_error,
+                )
+                await asyncio.sleep(delay)
+                delay *= 2
+        raise last_error if last_error else RuntimeError("AI request failed")
 
     async def complete(
         self, system_prompt: str, text: str, temperature: float = 0
     ) -> str:
-        headers = {}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
         payload = {
             "model": self.model,
             "messages": [
@@ -30,12 +87,8 @@ class AIClient:
             "temperature": temperature,
             "user": uuid.uuid4().hex,
         }
-        async with httpx.AsyncClient(timeout=self.timeout) as http:
-            response = await http.post(
-                f"{self.base_url}/chat/completions", json=payload, headers=headers
-            )
-            response.raise_for_status()
-            data = response.json()
+        response = await self._request("POST", "/chat/completions", json=payload)
+        data = response.json()
         return (data["choices"][0]["message"]["content"] or "").strip()
 
     async def check(self) -> tuple[bool, str]:
@@ -56,13 +109,8 @@ class AIClient:
             return False, "непредвиденная ошибка"
 
     async def list_models(self) -> list[str]:
-        headers = {}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-        async with httpx.AsyncClient(timeout=self.timeout) as http:
-            response = await http.get(f"{self.base_url}/models", headers=headers)
-            response.raise_for_status()
-            data = response.json()
+        response = await self._request("GET", "/models")
+        data = response.json()
         raw_models = data.get("data", []) if isinstance(data, dict) else data
         if not isinstance(raw_models, list):
             return []
