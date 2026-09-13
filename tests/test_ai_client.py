@@ -96,3 +96,44 @@ async def test_complete_retries_on_server_error(monkeypatch):
     client = AIClient("http://localhost/v1", "z", "", 5)
     assert await client.complete("sys", "user") == "ok"
     assert calls["count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_connect_error_is_not_retried(monkeypatch):
+    import httpx
+
+    calls = {"count": 0}
+
+    def handler(method, url, kwargs):
+        calls["count"] += 1
+        raise httpx.ConnectError("connection refused")
+
+    _install_mock(monkeypatch, handler)
+    client = AIClient("http://localhost/v1", "z", "", 5)
+    with pytest.raises(httpx.ConnectError):
+        await client.complete("sys", "user")
+    assert calls["count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_read_timeout_is_retried(monkeypatch):
+    import httpx
+
+    calls = {"count": 0}
+
+    def handler(method, url, kwargs):
+        calls["count"] += 1
+        if calls["count"] < 2:
+            raise httpx.ReadTimeout("slow")
+        return _mock_response({"choices": [{"message": {"content": "ok"}}]})
+
+    async def instant_sleep(_delay):
+        return None
+
+    import trevoga.integrations.ai_client as ai_client
+
+    monkeypatch.setattr(ai_client.asyncio, "sleep", instant_sleep)
+    _install_mock(monkeypatch, handler)
+    client = AIClient("http://localhost/v1", "z", "", 5)
+    assert await client.complete("sys", "user") == "ok"
+    assert calls["count"] == 2
