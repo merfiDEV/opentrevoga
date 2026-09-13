@@ -30,10 +30,18 @@ class FixOutcome:
 class FixService:
     """Редактирование постов через AI-редактор с превью и откатом."""
 
-    def __init__(self, moderation, *, caption_limit=CAPTION_LIMIT, text_limit=TEXT_LIMIT):
+    def __init__(
+        self,
+        moderation,
+        *,
+        caption_limit=CAPTION_LIMIT,
+        text_limit=TEXT_LIMIT,
+        autocheck_enabled=False,
+    ):
         self.moderation = moderation
         self.caption_limit = caption_limit
         self.text_limit = text_limit
+        self.autocheck_enabled = autocheck_enabled
         self._undo = OrderedDict()
 
     def parse_args(self, raw: str) -> tuple[str, str, bool]:
@@ -68,6 +76,19 @@ class FixService:
         if fixed == original.strip():
             return FixOutcome(RESULT_UNCHANGED, text=original, mode=mode, instruction=instruction)
         return FixOutcome(RESULT_OK, text=fixed, mode=mode, instruction=instruction)
+
+    async def autocheck(self, text: str) -> str | None:
+        """Прогон уже обработанного текста через ИИ в режиме official."""
+        if not text.strip():
+            return None
+        try:
+            fixed = await self.moderation.fix(text, "official")
+        except Exception:
+            logger.exception("AI autocheck failed")
+            return None
+        if not fixed or not fixed.strip():
+            return None
+        return fixed.strip()
 
     def limits_for(self, reply) -> int:
         return self.caption_limit if getattr(reply, "media", None) else self.text_limit

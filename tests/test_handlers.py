@@ -1,6 +1,6 @@
 import pytest
 
-from trevoga.handlers import commands, comments
+from trevoga.handlers import commands, comments, sources
 from trevoga.handlers.context import HandlerContext
 from trevoga.services.fix_service import FixService
 
@@ -348,6 +348,52 @@ async def test_fix_undo_restores_original():
     await handler(FakeFixEvent(".fix undo", reply=reply))
     assert client.edits and client.edits[0][0] == 7
     assert "оригинал" in client.edits[0][1]
+
+
+@pytest.mark.asyncio
+async def test_autocheck_message_edits_when_enabled():
+    client = FakeEditClient()
+    moderation = FakeModeration(fixed="Офіційний текст")
+    context = build_context(client=client, moderation=moderation)
+    context.fixer.autocheck_enabled = True
+    await sources._autocheck_message(client, context, 5, "якийсь текст")
+    assert moderation.calls and moderation.calls[0][1] == "official"
+    assert client.edits and client.edits[0][0] == 5
+    assert "Офіційний текст" in client.edits[0][1]
+
+
+@pytest.mark.asyncio
+async def test_autocheck_message_skips_when_disabled():
+    client = FakeEditClient()
+    moderation = FakeModeration(fixed="Офіційний текст")
+    context = build_context(client=client, moderation=moderation)
+    context.fixer.autocheck_enabled = False
+    await sources._autocheck_message(client, context, 5, "якийсь текст")
+    assert not moderation.calls
+    assert not client.edits
+
+
+@pytest.mark.asyncio
+async def test_aicheck_toggles_and_persists(monkeypatch):
+    saved = {}
+    monkeypatch.setattr(
+        commands, "save_aicheck", lambda value: saved.__setitem__("value", value)
+    )
+    client = FakeEditClient()
+    context = build_context(client=client)
+    commands.register(client, context)
+    handler = next(h for h in client.handlers if h.__name__ == "aicheck")
+    assert context.fixer.autocheck_enabled is False
+    on_event = FakeFixEvent(".aicheck on")
+    await handler(on_event)
+    assert context.fixer.autocheck_enabled is True
+    assert saved["value"] is True
+    assert any("включ" in text for text in on_event.responses)
+    off_event = FakeFixEvent(".aicheck off")
+    await handler(off_event)
+    assert context.fixer.autocheck_enabled is False
+    assert saved["value"] is False
+    assert any("выключ" in text for text in off_event.responses)
 
 
 @pytest.mark.asyncio

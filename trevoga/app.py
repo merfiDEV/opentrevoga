@@ -65,7 +65,7 @@ async def run():
                 "AI_MODE is enabled in configuration, but AI is unavailable: %s",
                 response,
             )
-    fixer = FixService(moderation)
+    fixer = FixService(moderation, autocheck_enabled=settings.aicheck_enabled)
     publisher = PublishingService(client, settings, posts, stats_repository)
     await client.start()
     await publisher.validate_channel_targets()

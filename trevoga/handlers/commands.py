@@ -2,7 +2,12 @@ import html
 
 from telethon import events
 
-from trevoga.config import save_ai_model, save_ignored_channels, save_watermark
+from trevoga.config import (
+    save_aicheck,
+    save_ai_model,
+    save_ignored_channels,
+    save_watermark,
+)
 from trevoga.handlers.context import HandlerContext
 from trevoga.services.fix_service import (
     RESULT_ERROR,
@@ -24,6 +29,7 @@ HELP_TEXT = """<blockquote>=== КОМАНДЫ АДМИНИСТРАТОРА ===
 
 .ai | .ai on | .ai off | .ai status | .ai set [MODEL]
 .wmark | .wmark on | .wmark off
+.aicheck | .aicheck on | .aicheck off
 .cignore [ID or @name] | .cignore off | .cignore list
 .fix [short|urgent|official|neutral] | .fix test | .fix <просьба> | .fix undo | .fix help
 .stats | .stats 12 | .stats 24
@@ -261,6 +267,30 @@ def register(client, context: HandlerContext):
         save_watermark(enabled)
         await event.respond(
             f"<blockquote>Ссылка в ватермарке: {'включена ✅' if is_watermark_enabled() else 'выключена ❌'}</blockquote>",
+            parse_mode="html",
+        )
+        await event.delete()
+
+    @client.on(
+        events.NewMessage(
+            chats=context.settings.group_c,
+            pattern=r"^\.aicheck(?:\s+(on|off|status))?\s*$",
+        )
+    )
+    async def aicheck(event):
+        if not context.is_admin(event.sender_id):
+            return
+        argument = (event.pattern_match.group(1) or "").lower()
+        if argument == "on":
+            context.fixer.autocheck_enabled = True
+        elif argument == "off":
+            context.fixer.autocheck_enabled = False
+        elif not argument:
+            context.fixer.autocheck_enabled = not context.fixer.autocheck_enabled
+        save_aicheck(context.fixer.autocheck_enabled)
+        state = "включён ✅" if context.fixer.autocheck_enabled else "выключен ❌"
+        await event.respond(
+            f"<blockquote>AI-редактор (official): {state}</blockquote>",
             parse_mode="html",
         )
         await event.delete()

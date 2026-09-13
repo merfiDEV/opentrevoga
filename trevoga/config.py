@@ -47,6 +47,7 @@ class Settings:
     ai_fix_api_key: str
     ai_fix_timeout: float
     watermark_enabled: bool = True
+    aicheck_enabled: bool = False
     channel_moderation_enabled: bool = False
     ignored_channels: tuple[int, ...] = ()
 
@@ -110,6 +111,7 @@ def load_settings() -> Settings:
         ai_fix_api_key=os.getenv("AI_FIX_API_KEY") or ai_key,
         ai_fix_timeout=_env_float("AI_FIX_TIMEOUT", ai_timeout),
         watermark_enabled=_env_flag("WATERMARK_ENABLED", "1"),
+        aicheck_enabled=_env_flag("AICHECK_ENABLED"),
         channel_moderation_enabled=_env_flag("CHANNEL_MODERATION_ENABLED"),
         ignored_channels=tuple(
             int(value.strip())
@@ -137,6 +139,22 @@ def save_ai_model(model: str, fix: bool = False) -> None:
 
 def save_watermark(enabled: bool) -> None:
     name = "WATERMARK_ENABLED"
+    value = "1" if enabled else "0"
+    path = BASE_DIR / ".env"
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    replacement = f"{name}={value}"
+    for index, line in enumerate(lines):
+        if line.startswith(f"{name}="):
+            lines[index] = replacement
+            break
+    else:
+        lines.append(replacement)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.environ[name] = value
+
+
+def save_aicheck(enabled: bool) -> None:
+    name = "AICHECK_ENABLED"
     value = "1" if enabled else "0"
     path = BASE_DIR / ".env"
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []

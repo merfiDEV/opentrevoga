@@ -77,6 +77,28 @@ async def _notify_subscribers(text, caption, messages, client, context: HandlerC
                     logger.exception("Failed to notify subscriber %s", user_id)
 
 
+async def _autocheck_message(client, context: HandlerContext, message_id: int, caption: str):
+    if not context.fixer or not context.fixer.autocheck_enabled:
+        return
+    text = clean_text(caption)
+    fixed = await context.fixer.autocheck(text)
+    if not fixed or fixed.strip() == text.strip():
+        return
+    body = format_post_html(fixed, context.rules)
+    mark = watermark()
+    edited = f"{body}\n\n{mark}" if mark else body
+    try:
+        await client.edit_message(
+            context.settings.group_c,
+            message_id,
+            edited,
+            parse_mode="html",
+            link_preview=False,
+        )
+    except Exception:
+        logger.exception("AI autocheck edit failed for %s", message_id)
+
+
 async def _forward_messages(messages, chat_id, client, context: HandlerContext):
     message = messages[0]
     text = clean_text(next((item.raw_text for item in messages if item.raw_text), ""))
@@ -130,5 +152,8 @@ async def _forward_messages(messages, chat_id, client, context: HandlerContext):
             )
         sent_message = sent[0] if isinstance(sent, list) else sent
         context.moderation.schedule_check(sent_message.id, text, caption)
+        context.moderation.schedule(
+            _autocheck_message(client, context, sent_message.id, caption)
+        )
     except Exception:
         logger.exception("Failed to publish source message %s", message.id)
