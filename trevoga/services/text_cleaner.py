@@ -44,10 +44,16 @@ def photo_rules(assets_dir: Path):
             "https://uk.wikipedia.org/wiki/Безпілотний_літальний_апарат",
         ),
         (
-            ("каб", "каби", "бандероль", "баражуючі боєприпаси"),
+            ("каб", "каби"),
             assets_dir / "cab.jpg",
             "Каби",
             "https://uk.wikipedia.org/wiki/Керована_авіаційна_бомба",
+        ),
+        (
+            ("бандероль", "баражуючий", "баражуючі", "боєприпас"),
+            assets_dir / "бандероль.jpg",
+            "Бандероль",
+            "https://uk.wikipedia.org/wiki/Баражуючий_боєприпас",
         ),
         (
             ("рсзв", "рсзо"),
@@ -135,11 +141,7 @@ def quote_html(text: str) -> str:
 
 def detect_keywords(text: str, rules) -> list[str]:
     lowered = text.lower()
-    return [
-        label
-        for keywords, _, label, _ in rules
-        if any(word in lowered for word in keywords)
-    ]
+    return [label for keywords, _, label, _ in rules if any(word in lowered for word in keywords)]
 
 
 def matching_photos(text: str, rules) -> list[Path]:
