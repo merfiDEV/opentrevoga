@@ -247,10 +247,11 @@ def register(client, context: HandlerContext):
         if status:
             await event.respond(status, parse_mode="html")
 
-    @client.on(events.NewMessage(chats=context.settings.group_c, pattern=r"^\.help\s*$"))
+    @client.on(events.NewMessage(pattern=r"^\.help\s*$"))
     @command(context)
     async def help_command(event):
-        await event.respond(i18n.HELP_TEXT, parse_mode="html")
+        text = i18n.HELP_ADMIN if context.is_admin(event.sender_id) else i18n.HELP_USER
+        await event.respond(text, parse_mode="html")
 
     @client.on(events.NewMessage(chats=context.settings.group_c, pattern=r"^\.health\s*$"))
     @command(context, admin=True)
