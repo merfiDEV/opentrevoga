@@ -6,6 +6,7 @@ from pathlib import Path
 WATERMARK_TEXT = "#OpenTrevoga 🕊"
 WATERMARK_URL = "https://t.me/OpenTrevoga"
 _watermark_enabled = True
+_cards_enabled = True
 EMOJI_PATTERN = re.compile(
     "["
     "\U0001f000-\U0001faff"
@@ -33,6 +34,15 @@ def set_watermark(enabled: bool) -> None:
 
 def is_watermark_enabled() -> bool:
     return _watermark_enabled
+
+
+def set_cards(enabled: bool) -> None:
+    global _cards_enabled
+    _cards_enabled = enabled
+
+
+def is_cards_enabled() -> bool:
+    return _cards_enabled
 
 
 def photo_rules(assets_dir: Path):
@@ -152,6 +162,8 @@ def detect_keywords(text: str, rules) -> list[str]:
 
 
 def matching_photos(text: str, rules) -> list[Path]:
+    if not _cards_enabled:
+        return []
     lowered = text.lower()
     return [
         path

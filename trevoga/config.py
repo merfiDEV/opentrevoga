@@ -50,6 +50,7 @@ class Settings:
     ai_fix_api_key: str
     ai_fix_timeout: float
     watermark_enabled: bool = True
+    cards_enabled: bool = True
     aicheck_enabled: bool = False
     channel_moderation_enabled: bool = False
     ignored_channels: tuple[int, ...] = ()
@@ -127,6 +128,7 @@ def load_settings() -> Settings:
         ai_fix_api_key=os.getenv("AI_FIX_API_KEY") or ai_key,
         ai_fix_timeout=_env_float("AI_FIX_TIMEOUT", ai_timeout),
         watermark_enabled=_env_flag("WATERMARK_ENABLED", "1"),
+        cards_enabled=_env_flag("PHOTO_CARDS_ENABLED", "1"),
         aicheck_enabled=_env_flag("AICHECK_ENABLED"),
         channel_moderation_enabled=_env_flag("CHANNEL_MODERATION_ENABLED"),
         ignored_channels=tuple(
@@ -174,6 +176,10 @@ def save_ai_model(model: str, fix: bool = False) -> None:
 
 def save_watermark(enabled: bool) -> None:
     _write_env("WATERMARK_ENABLED", "1" if enabled else "0")
+
+
+def save_cards(enabled: bool) -> None:
+    _write_env("PHOTO_CARDS_ENABLED", "1" if enabled else "0")
 
 
 def save_aicheck(enabled: bool) -> None:

@@ -19,7 +19,7 @@ from trevoga.services.fix_service import FixService
 from trevoga.services.moderation import ModerationService
 from trevoga.services.publishing import PublishingService
 from trevoga.services.statistics import StatisticsService
-from trevoga.services.text_cleaner import photo_rules, set_watermark
+from trevoga.services.text_cleaner import photo_rules, set_cards, set_watermark
 from trevoga.storage.database import Database
 from trevoga.storage.repositories import (
     ForwardedPostRepository,
@@ -54,6 +54,7 @@ async def run():
     settings = load_settings()
     _setup_logging(settings.log_path)
     set_watermark(settings.watermark_enabled)
+    set_cards(settings.cards_enabled)
     settings.validate()
     database = Database(settings.database_path)
     database.initialize()

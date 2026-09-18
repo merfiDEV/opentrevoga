@@ -7,6 +7,7 @@ from trevoga import health, i18n
 from trevoga.config import (
     save_aicheck,
     save_ai_model,
+    save_cards,
     save_ignored_channels,
     save_watermark,
 )
@@ -19,8 +20,10 @@ from trevoga.services.fix_service import (
 )
 from trevoga.services.text_cleaner import (
     clean_text,
+    is_cards_enabled,
     is_watermark_enabled,
     render_post,
+    set_cards,
     set_watermark,
     watermark,
 )
@@ -197,6 +200,20 @@ def register(client, context: HandlerContext):
         save_watermark(enabled)
         await event.respond(
             i18n.WMARK_ON if is_watermark_enabled() else i18n.WMARK_OFF,
+            parse_mode="html",
+        )
+
+    @client.on(
+        events.NewMessage(chats=context.settings.group_c, pattern=r"^\.cart(?:\s+(on|off))?\s*$")
+    )
+    @command(context, admin=True)
+    async def cards_command(event):
+        value = event.pattern_match.group(1)
+        enabled = (value == "on") if value else not is_cards_enabled()
+        set_cards(enabled)
+        save_cards(enabled)
+        await event.respond(
+            i18n.CART_ON if is_cards_enabled() else i18n.CART_OFF,
             parse_mode="html",
         )
 

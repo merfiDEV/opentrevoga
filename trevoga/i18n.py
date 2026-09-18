@@ -73,6 +73,10 @@ AI_ENABLE_FAILED = "<blockquote>AI не увімкнено: {error}</blockquote>
 WMARK_ON = "<blockquote>Посилання у ватермарці: увімкнено ✅</blockquote>"
 WMARK_OFF = "<blockquote>Посилання у ватермарці: вимкнено ❌</blockquote>"
 
+# --- .cart ---
+CART_ON = "<blockquote>Фото-картки озброєнь: увімкнено ✅</blockquote>"
+CART_OFF = "<blockquote>Фото-картки озброєнь: вимкнено ❌</blockquote>"
+
 # --- .aicheck ---
 AICHECK_ON = "<blockquote>AI-редактор (official): увімкнено ✅</blockquote>"
 AICHECK_OFF = "<blockquote>AI-редактор (official): вимкнено ❌</blockquote>"
