@@ -1,4 +1,6 @@
+import contextlib
 import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -77,9 +79,7 @@ def load_settings() -> Settings:
         api_id=int(os.getenv("API_ID", "0")),
         api_hash=os.getenv("API_HASH", ""),
         source_channels=tuple(
-            value.strip()
-            for value in os.getenv("SOURCE_CHANNELS", "").split(",")
-            if value.strip()
+            value.strip() for value in os.getenv("SOURCE_CHANNELS", "").split(",") if value.strip()
         ),
         group_c=int(os.getenv("GROUP_C", "0")),
         group_d_targets=tuple(
@@ -121,65 +121,48 @@ def load_settings() -> Settings:
     )
 
 
-def save_ai_model(model: str, fix: bool = False) -> None:
-    """Persist a runtime model choice without rewriting unrelated .env values."""
-    name = "AI_FIX_MODEL" if fix else "AI_MODEL"
+def _atomic_write(path: Path, content: str) -> None:
+    """Write content to path atomically via a temp file + os.replace."""
+    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_name, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_name)
+        raise
+
+
+def _write_env(name: str, value: str) -> None:
+    """Persist NAME=value into .env and current process env, atomically."""
     path = BASE_DIR / ".env"
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    replacement = f"{name}={model}"
+    replacement = f"{name}={value}"
     for index, line in enumerate(lines):
         if line.startswith(f"{name}="):
             lines[index] = replacement
             break
     else:
         lines.append(replacement)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    os.environ[name] = model
+    _atomic_write(path, "\n".join(lines) + "\n")
+    os.environ[name] = value
+
+
+def save_ai_model(model: str, fix: bool = False) -> None:
+    """Persist a runtime model choice without rewriting unrelated .env values."""
+    _write_env("AI_FIX_MODEL" if fix else "AI_MODEL", model)
 
 
 def save_watermark(enabled: bool) -> None:
-    name = "WATERMARK_ENABLED"
-    value = "1" if enabled else "0"
-    path = BASE_DIR / ".env"
-    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    replacement = f"{name}={value}"
-    for index, line in enumerate(lines):
-        if line.startswith(f"{name}="):
-            lines[index] = replacement
-            break
-    else:
-        lines.append(replacement)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    os.environ[name] = value
+    _write_env("WATERMARK_ENABLED", "1" if enabled else "0")
 
 
 def save_aicheck(enabled: bool) -> None:
-    name = "AICHECK_ENABLED"
-    value = "1" if enabled else "0"
-    path = BASE_DIR / ".env"
-    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    replacement = f"{name}={value}"
-    for index, line in enumerate(lines):
-        if line.startswith(f"{name}="):
-            lines[index] = replacement
-            break
-    else:
-        lines.append(replacement)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    os.environ[name] = value
+    _write_env("AICHECK_ENABLED", "1" if enabled else "0")
 
 
 def save_ignored_channels(channels: tuple[int, ...] | list[int]) -> None:
-    name = "CIGNORE_CHANNELS"
-    value = ",".join(str(channel) for channel in channels)
-    path = BASE_DIR / ".env"
-    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    replacement = f"{name}={value}"
-    for index, line in enumerate(lines):
-        if line.startswith(f"{name}="):
-            lines[index] = replacement
-            break
-    else:
-        lines.append(replacement)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    os.environ[name] = value
+    _write_env("CIGNORE_CHANNELS", ",".join(str(channel) for channel in channels))

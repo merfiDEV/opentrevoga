@@ -134,6 +134,13 @@ def format_post_html(text: str, rules) -> str:
     return f"<blockquote>{highlighted}</blockquote>"
 
 
+def render_post(text: str, rules, links_html: str = "") -> str:
+    """Format post body, optional wiki links and the watermark (single source of truth)."""
+    rendered = format_post_html(text, rules)
+    parts = [part for part in (rendered, links_html, watermark()) if part]
+    return "\n\n".join(parts)
+
+
 def quote_html(text: str) -> str:
     value = escape(text).strip()
     return f"<blockquote>{value}</blockquote>" if value else ""

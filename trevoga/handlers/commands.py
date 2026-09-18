@@ -2,6 +2,7 @@ import html
 
 from telethon import events
 
+from trevoga import i18n
 from trevoga.config import (
     save_aicheck,
     save_ai_model,
@@ -9,70 +10,31 @@ from trevoga.config import (
     save_watermark,
 )
 from trevoga.handlers.context import HandlerContext
+from trevoga.handlers.decorators import command
 from trevoga.services.fix_service import (
     RESULT_ERROR,
-    RESULT_OK,
     RESULT_TOO_LONG,
     RESULT_UNCHANGED,
 )
 from trevoga.services.text_cleaner import (
     clean_text,
-    format_post_html,
     is_watermark_enabled,
-    quote_html,
+    render_post,
     set_watermark,
     watermark,
 )
 
 
-HELP_TEXT = """<blockquote>=== КОМАНДЫ АДМИНИСТРАТОРА ===
-
-.ai | .ai on | .ai off | .ai status | .ai set [MODEL]
-.wmark | .wmark on | .wmark off
-.aicheck | .aicheck on | .aicheck off
-.cignore [ID or @name] | .cignore off | .cignore list
-.fix [short|urgent|official|neutral] | .fix test | .fix <просьба> | .fix undo | .fix help
-.stats | .stats 12 | .stats 24
-.ai_reason [MESSAGE_ID] или ответом на сообщение
-.отмена | .delete | .удалить
-.help
-
-=== КОМАНДЫ ПОДПИСКИ ===
-
-.sub [СЛОВО] — подписаться на ключевое слово
-.unsub [СЛОВО] — отписаться от ключевого слова
-.unsub all — сбросить все подписки</blockquote>"""
-
-
-FIX_HELP = """<blockquote>=== .fix ===
-.fix — отредактировать ответом (режим default)
-.fix short|urgent|official|neutral — стиль редактуры
-.fix test [режим] [просьба] — показать результат, не меняя пост
-.fix [просьба] — своя инструкция редактору (напр. «убери мат»)
-.fix undo — вернуть исходный текст (в течение 10 минут)
-.fix help — эта справка</blockquote>"""
-
-
 async def _undo_fix(client, context, event):
     if not event.message.is_reply:
-        await event.respond(
-            "<blockquote>⚠️ Ответьте .fix undo на отредактированное сообщение.</blockquote>",
-            parse_mode="html",
-        )
-        await event.delete()
+        await event.respond(i18n.FIX_NEED_REPLY_UNDO, parse_mode="html")
         return
     reply = await event.message.get_reply_message()
     saved = context.fixer.pop_undo(reply.id) if reply else None
     if saved is None:
-        await event.respond(
-            "<blockquote>ℹ️ Нет сохранённой версии для отката (или истёк срок).</blockquote>",
-            parse_mode="html",
-        )
-        await event.delete()
+        await event.respond(i18n.FIX_UNDO_MISSING, parse_mode="html")
         return
-    restored = f"{format_post_html(saved, context.rules)}"
-    mark = watermark()
-    full = f"{restored}\n\n{mark}" if mark else restored
+    full = render_post(saved, context.rules)
     try:
         await client.edit_message(
             context.settings.group_c,
@@ -81,39 +43,28 @@ async def _undo_fix(client, context, event):
             parse_mode="html",
             link_preview=False,
         )
-        await event.respond(
-            "<blockquote>↩️ Восстановлен исходный текст.</blockquote>",
-            parse_mode="html",
-        )
+        await event.respond(i18n.FIX_UNDO_DONE, parse_mode="html")
     except Exception as error:
         await event.respond(
-            f"<blockquote>⚠️ Не удалось откатить: {html.escape(str(error))}</blockquote>",
+            i18n.FIX_UNDO_FAILED.format(error=html.escape(str(error))),
             parse_mode="html",
         )
-    await event.delete()
 
 
-async def _render_fix_outcome(
-    client, context, event, reply, original, mode, outcome, preview
-):
+async def _render_fix_outcome(client, context, event, reply, original, mode, outcome, preview):
     if outcome.status == RESULT_ERROR:
         detail = f": {html.escape(outcome.error)}" if outcome.error else ""
-        return f"<blockquote>⚠️ AI-редактор недоступен{detail}</blockquote>"
+        return i18n.FIX_AI_UNAVAILABLE.format(detail=detail)
     if outcome.status == RESULT_UNCHANGED:
-        return "<blockquote>ℹ️ Текст уже в порядке, изменений нет.</blockquote>"
+        return i18n.FIX_UNCHANGED
     if outcome.status == RESULT_TOO_LONG:
-        return "<blockquote>⚠️ Результат слишком длинный для этого сообщения.</blockquote>"
+        return i18n.FIX_TOO_LONG
     limit = context.fixer.limits_for(reply)
-    rendered = f"{format_post_html(outcome.text, context.rules)}"
-    mark = watermark()
-    full = f"{rendered}\n\n{mark}" if mark else rendered
+    full = render_post(outcome.text, context.rules)
     if len(full) > limit:
-        return (
-            "<blockquote>⚠️ Результат не влезает в лимит сообщения "
-            f"({len(full)}/{limit}). Попробуйте .fix test.</blockquote>"
-        )
+        return i18n.FIX_OVERFLOW.format(length=len(full), limit=limit)
     if preview:
-        return f"<blockquote>🔎 Предпросмотр ({html.escape(mode)}):</blockquote>{full}"
+        return i18n.FIX_PREVIEW.format(mode=html.escape(mode), body=full)
     context.fixer.remember(reply.id, original)
     try:
         await client.edit_message(
@@ -124,8 +75,8 @@ async def _render_fix_outcome(
             link_preview=False,
         )
     except Exception as error:
-        return f"<blockquote>⚠️ Не удалось изменить пост: {html.escape(str(error))}</blockquote>"
-    return f"<blockquote>✅ Исправлено (режим: {html.escape(mode)})</blockquote>"
+        return i18n.FIX_EDIT_FAILED.format(error=html.escape(str(error)))
+    return i18n.FIX_DONE.format(mode=html.escape(mode))
 
 
 def register(client, context: HandlerContext):
@@ -135,19 +86,18 @@ def register(client, context: HandlerContext):
             pattern=r"^\.cignore(?:\s+(.+))?\s*$",
         )
     )
+    @command(context, admin=True)
     async def channel_ignore(event):
-        if not context.is_admin(event.sender_id):
-            return
         value = (event.pattern_match.group(1) or "").strip()
         if not value or value.lower() == "list":
             channels = sorted(context.ignored_channels)
-            response = "Игнорируемые каналы: " + (
-                ", ".join(map(str, channels)) if channels else "нет"
+            response = i18n.CIGNORE_LIST.format(
+                channels=", ".join(map(str, channels)) if channels else i18n.CIGNORE_NONE
             )
         elif value.lower() == "off":
             context.ignored_channels.clear()
             save_ignored_channels(tuple())
-            response = "Игнорирование каналов выключено"
+            response = i18n.CIGNORE_OFF
         else:
             try:
                 target = int(value) if value.lstrip("-").isdigit() else value
@@ -157,16 +107,14 @@ def register(client, context: HandlerContext):
                 channel_id = utils.get_peer_id(entity)
                 context.ignored_channels.add(channel_id)
                 save_ignored_channels(tuple(sorted(context.ignored_channels)))
-                response = f"Канал добавлен в исключения: {channel_id}"
+                response = i18n.CIGNORE_ADDED.format(channel_id=channel_id)
             except Exception as error:
-                response = f"Не удалось найти канал: {html.escape(str(error))}"
+                response = i18n.CIGNORE_NOT_FOUND.format(error=html.escape(str(error)))
         await event.respond(f"<blockquote>{response}</blockquote>", parse_mode="html")
-        await event.delete()
 
     @client.on(events.NewMessage(pattern=r"^\.stat(?:s)?(?:\s+(\d+))?$"))
+    @command(context, admin=True)
     async def stats(event):
-        if not context.is_admin(event.sender_id):
-            return
         value = event.pattern_match.group(1)
         hours = int(value) if value else None
         text = (
@@ -175,7 +123,6 @@ def register(client, context: HandlerContext):
             else f"<blockquote>{context.statistics.build_report(hours)}\n\n{watermark()}</blockquote>"
         )
         await event.respond(text, parse_mode="html")
-        await event.delete()
 
     @client.on(
         events.NewMessage(
@@ -183,9 +130,8 @@ def register(client, context: HandlerContext):
             pattern=r"^\.ai(?:\s+(on|off|status|set)(?:\s+(.+))?)?\s*$",
         )
     )
+    @command(context, admin=True)
     async def ai_mode(event):
-        if not context.is_admin(event.sender_id):
-            return
         argument = (event.pattern_match.group(1) or "").lower()
         model = event.pattern_match.group(2)
         if argument == "set":
@@ -198,43 +144,32 @@ def register(client, context: HandlerContext):
                 if not selected_model:
                     models = await context.moderation.list_models(fix)
                     if not models:
-                        response = (
-                            "<blockquote>Доступные модели не найдены</blockquote>"
-                        )
+                        response = i18n.AI_NO_MODELS
                     else:
-                        response = (
-                            "<blockquote>Доступные модели:\n"
-                            + "\n".join(
+                        response = i18n.AI_MODELS_LIST.format(
+                            models="\n".join(
                                 f"{index}. {html.escape(name)}"
                                 for index, name in enumerate(models, 1)
                             )
-                            + "</blockquote>"
                         )
                 elif len(parts) > 1:
-                    response = "<blockquote>Формат: .ai set MODEL [fix]</blockquote>"
+                    response = i18n.AI_SET_FORMAT
                 elif await context.moderation.set_model(selected_model, fix):
                     save_ai_model(selected_model, fix)
-                    response = (
-                        f"<blockquote>Модель {'fix' if fix else 'AI'} изменена на: "
-                        f"{html.escape(selected_model)}</blockquote>"
+                    response = i18n.AI_MODEL_CHANGED.format(
+                        scope="fix" if fix else "AI",
+                        model=html.escape(selected_model),
                     )
                 else:
-                    response = (
-                        "<blockquote>Такой модели нет в списке доступных</blockquote>"
-                    )
+                    response = i18n.AI_MODEL_UNKNOWN
             except Exception as error:
-                response = f"<blockquote>Не удалось получить модели: {html.escape(str(error))}</blockquote>"
+                response = i18n.AI_MODELS_FAILED.format(error=html.escape(str(error)))
             await event.respond(response, parse_mode="html")
-            await event.delete()
             return
         if argument == "on":
             available, response = await context.moderation.enable()
             if not available:
-                await event.respond(
-                    f"<blockquote>AI не включен: {response}</blockquote>",
-                    parse_mode="html",
-                )
-                await event.delete()
+                await event.respond(i18n.AI_ENABLE_FAILED.format(error=response), parse_mode="html")
                 return
         elif argument == "off":
             context.moderation.enabled = False
@@ -245,31 +180,24 @@ def register(client, context: HandlerContext):
                 available, response = await context.moderation.enable()
                 if not available:
                     await event.respond(
-                        f"<blockquote>AI не включен: {response}</blockquote>",
-                        parse_mode="html",
+                        i18n.AI_ENABLE_FAILED.format(error=response), parse_mode="html"
                     )
-                    await event.delete()
                     return
         await event.respond(context.moderation.status_text(), parse_mode="html")
-        await event.delete()
 
     @client.on(
-        events.NewMessage(
-            chats=context.settings.group_c, pattern=r"^\.wmark(?:\s+(on|off))?\s*$"
-        )
+        events.NewMessage(chats=context.settings.group_c, pattern=r"^\.wmark(?:\s+(on|off))?\s*$")
     )
+    @command(context, admin=True)
     async def watermark_command(event):
-        if not context.is_admin(event.sender_id):
-            return
         value = event.pattern_match.group(1)
         enabled = (value == "on") if value else not is_watermark_enabled()
         set_watermark(enabled)
         save_watermark(enabled)
         await event.respond(
-            f"<blockquote>Ссылка в ватермарке: {'включена ✅' if is_watermark_enabled() else 'выключена ❌'}</blockquote>",
+            i18n.WMARK_ON if is_watermark_enabled() else i18n.WMARK_OFF,
             parse_mode="html",
         )
-        await event.delete()
 
     @client.on(
         events.NewMessage(
@@ -277,9 +205,8 @@ def register(client, context: HandlerContext):
             pattern=r"^\.aicheck(?:\s+(on|off|status))?\s*$",
         )
     )
+    @command(context, admin=True)
     async def aicheck(event):
-        if not context.is_admin(event.sender_id):
-            return
         argument = (event.pattern_match.group(1) or "").lower()
         if argument == "on":
             context.fixer.autocheck_enabled = True
@@ -288,43 +215,27 @@ def register(client, context: HandlerContext):
         elif not argument:
             context.fixer.autocheck_enabled = not context.fixer.autocheck_enabled
         save_aicheck(context.fixer.autocheck_enabled)
-        state = "включён ✅" if context.fixer.autocheck_enabled else "выключен ❌"
         await event.respond(
-            f"<blockquote>AI-редактор (official): {state}</blockquote>",
+            i18n.AICHECK_ON if context.fixer.autocheck_enabled else i18n.AICHECK_OFF,
             parse_mode="html",
         )
-        await event.delete()
 
-    @client.on(
-        events.NewMessage(
-            chats=context.settings.group_c, pattern=r"^\.fix(?:\s+(.+))?\s*$"
-        )
-    )
+    @client.on(events.NewMessage(chats=context.settings.group_c, pattern=r"^\.fix(?:\s+(.+))?\s*$"))
+    @command(context, admin=True)
     async def fix(event):
-        if not context.is_admin(event.sender_id):
-            return
         argument = (event.pattern_match.group(1) or "").strip()
         if argument.lower() in {"help", "?"}:
-            await event.respond(FIX_HELP, parse_mode="html")
-            await event.delete()
+            await event.respond(i18n.FIX_HELP, parse_mode="html")
             return
         if argument.lower() == "undo":
             await _undo_fix(client, context, event)
             return
         if not event.message.is_reply:
-            await event.respond(
-                "<blockquote>⚠️ Ответьте командой .fix на сообщение, которое нужно отредактировать.</blockquote>",
-                parse_mode="html",
-            )
-            await event.delete()
+            await event.respond(i18n.FIX_NEED_REPLY, parse_mode="html")
             return
         reply = await event.message.get_reply_message()
         if reply is None:
-            await event.respond(
-                "<blockquote>⚠️ Не удалось получить исходное сообщение.</blockquote>",
-                parse_mode="html",
-            )
-            await event.delete()
+            await event.respond(i18n.FIX_NO_SOURCE, parse_mode="html")
             return
         original = clean_text(reply.raw_text or "")
         mode, instruction, preview = context.fixer.parse_args(argument)
@@ -334,64 +245,51 @@ def register(client, context: HandlerContext):
         )
         if status:
             await event.respond(status, parse_mode="html")
-        await event.delete()
 
-    @client.on(
-        events.NewMessage(chats=context.settings.group_c, pattern=r"^\.help\s*$")
-    )
+    @client.on(events.NewMessage(chats=context.settings.group_c, pattern=r"^\.help\s*$"))
+    @command(context)
     async def help_command(event):
-        await event.respond(HELP_TEXT, parse_mode="html")
-        await event.delete()
+        await event.respond(i18n.HELP_TEXT, parse_mode="html")
 
     @client.on(events.NewMessage(pattern=r"^\.sub(?:\s+(.+))?\s*$"))
+    @command(context)
     async def subscribe(event):
-        if event.sender_id is None:
-            return
         value = (event.pattern_match.group(1) or "").strip()
         if not value:
             keywords = context.subscriptions.list_for_user(event.sender_id)
-            text = (
-                "<blockquote>Ваши подписки: "
-                + (", ".join(html.escape(word) for word in keywords) if keywords else "нет")
-                + "\n\n📌 Можно подписываться на типы вооружения "
-                + "(бпла, каб, рсзв, fpv, ракета, балістика, арта) "
-                + "или на свой город (краматорськ, покровськ, бахмут тощо)"
-                + "</blockquote>"
+            text = i18n.SUB_LIST.format(
+                keywords=", ".join(html.escape(word) for word in keywords)
+                if keywords
+                else i18n.SUB_NONE
             )
         else:
             normalized = value.lower()
             context.subscriptions.add(event.sender_id, normalized)
-            text = f"<blockquote>Подписка на «{html.escape(normalized)}» добавлена</blockquote>"
+            text = i18n.SUB_ADDED.format(word=html.escape(normalized))
         await event.respond(text, parse_mode="html")
-        await event.delete()
 
     @client.on(events.NewMessage(pattern=r"^\.unsub(?:\s+(.+))?\s*$"))
+    @command(context)
     async def unsubscribe(event):
-        if event.sender_id is None:
-            return
         value = (event.pattern_match.group(1) or "").strip()
         if not value:
-            text = "<blockquote>Формат: .unsub СЛОВО | .unsub all</blockquote>"
+            text = i18n.UNSUB_FORMAT
         elif value.lower() == "all":
             removed = context.subscriptions.remove_all(event.sender_id)
-            text = f"<blockquote>Сброшено подписок: {removed}</blockquote>"
+            text = i18n.UNSUB_ALL.format(count=removed)
         else:
             normalized = value.lower()
             if context.subscriptions.remove(event.sender_id, normalized):
-                text = f"<blockquote>Подписка на «{html.escape(normalized)}» удалена</blockquote>"
+                text = i18n.UNSUB_REMOVED.format(word=html.escape(normalized))
             else:
-                text = f"<blockquote>Подписка на «{html.escape(normalized)}» не найдена</blockquote>"
+                text = i18n.UNSUB_MISSING.format(word=html.escape(normalized))
         await event.respond(text, parse_mode="html")
-        await event.delete()
 
     @client.on(
-        events.NewMessage(
-            chats=context.settings.group_c, pattern=r"^\.ai_reason(?:\s+(\d+))?\s*$"
-        )
+        events.NewMessage(chats=context.settings.group_c, pattern=r"^\.ai_reason(?:\s+(\d+))?\s*$")
     )
+    @command(context, admin=True)
     async def ai_reason(event):
-        if not context.is_admin(event.sender_id):
-            return
         value = event.pattern_match.group(1)
         message_id = int(value) if value else None
         if message_id is None and event.message.is_reply:
@@ -399,17 +297,14 @@ def register(client, context: HandlerContext):
             message_id = reply.id if reply else None
         result = context.moderation_results.get(message_id) if message_id else None
         if not result:
-            text = "<blockquote>Результат AI-проверки не найден</blockquote>"
+            text = i18n.AI_REASON_MISSING
         else:
-            reason = result.reason or "нет"
-            text = (
-                "<blockquote>"
-                f"Сообщение: {result.message_id}\n"
-                f"Статус: {html.escape(result.status)}\n"
-                f"Причина: {html.escape(reason)}\n"
-                f"Пояснение: {html.escape(result.reason_text)}\n"
-                f"Уверенность: {result.confidence if result.confidence is not None else 'нет'}"
-                "</blockquote>"
+            reason = result.reason or "немає"
+            text = i18n.AI_REASON_TEXT.format(
+                message_id=result.message_id,
+                status=html.escape(result.status),
+                reason=html.escape(reason),
+                reason_text=html.escape(result.reason_text),
+                confidence=result.confidence if result.confidence is not None else "немає",
             )
         await event.respond(text, parse_mode="html")
-        await event.delete()

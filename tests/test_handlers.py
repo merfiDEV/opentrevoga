@@ -140,7 +140,7 @@ async def test_help_command_returns_commands():
     )
     event = FakeEvent()
     await help_handler(event)
-    assert event.responses and "КОМАНДЫ АДМИНИСТРАТОРА" in event.responses[0]
+    assert event.responses and "КОМАНДИ АДМІНІСТРАТОРА" in event.responses[0]
 
 
 class FakePublisher:
@@ -232,9 +232,7 @@ class FakeCommentSettings(FakeSettings):
 async def test_comment_is_forwarded_to_targets():
     client = FakeClient()
     publisher = FakePublisher()
-    context = build_context(
-        client=client, publisher=publisher, settings=FakeCommentSettings()
-    )
+    context = build_context(client=client, publisher=publisher, settings=FakeCommentSettings())
     comments.register(client, context)
     handler = next(h for h in client.handlers if h.__name__ == "handle_comment")
     event = FakeCommentEvent("важное уточнение", FakeReplyMessage(7, "исходный текст"))
@@ -248,9 +246,7 @@ async def test_subscribe_adds_keyword():
     subscriptions = FakeSubscriptions()
     context = build_context(client=client, subscriptions=subscriptions)
     commands.register(client, context)
-    handler = next(
-        h for h in client.handlers if h.__name__ == "subscribe"
-    )
+    handler = next(h for h in client.handlers if h.__name__ == "subscribe")
     event = FakeEvent(pattern_groups=["БПЛА"])
     await handler(event)
     assert "бпла" in subscriptions.list_for_user(1)
@@ -263,7 +259,7 @@ async def test_fix_without_reply_reports_usage():
     commands.register(client, context)
     event = FakeFixEvent(".fix short", reply=None)
     await fix_handler(client)(event)
-    assert event.responses and "Ответьте" in event.responses[0]
+    assert event.responses and "Дайте відповідь" in event.responses[0]
     assert not client.edits
 
 
@@ -278,7 +274,7 @@ async def test_fix_edits_reply_in_mode():
     await fix_handler(client)(event)
     assert moderation.calls == [("исходный текст", "short", "")]
     assert client.edits and client.edits[0][0] == 7
-    assert any("Исправлено" in text for text in event.responses)
+    assert any("Виправлено" in text for text in event.responses)
 
 
 @pytest.mark.asyncio
@@ -305,7 +301,7 @@ async def test_fix_test_mode_does_not_edit():
     event = FakeFixEvent(".fix test", reply=reply)
     await fix_handler(client)(event)
     assert not client.edits
-    assert any("Предпросмотр" in text for text in event.responses)
+    assert any("Попередній перегляд" in text for text in event.responses)
 
 
 @pytest.mark.asyncio
@@ -318,7 +314,7 @@ async def test_fix_reports_when_ai_unavailable():
     event = FakeFixEvent(".fix", reply=reply)
     await fix_handler(client)(event)
     assert not client.edits
-    assert any("недоступен" in text for text in event.responses)
+    assert any("недоступний" in text for text in event.responses)
 
 
 @pytest.mark.asyncio
@@ -331,7 +327,7 @@ async def test_fix_unchanged_reports_no_changes():
     event = FakeFixEvent(".fix", reply=reply)
     await fix_handler(client)(event)
     assert not client.edits
-    assert any("изменений нет" in text for text in event.responses)
+    assert any("змін немає" in text for text in event.responses)
 
 
 @pytest.mark.asyncio
@@ -397,9 +393,7 @@ async def test_autocheck_keeps_wiki_links():
 @pytest.mark.asyncio
 async def test_aicheck_toggles_and_persists(monkeypatch):
     saved = {}
-    monkeypatch.setattr(
-        commands, "save_aicheck", lambda value: saved.__setitem__("value", value)
-    )
+    monkeypatch.setattr(commands, "save_aicheck", lambda value: saved.__setitem__("value", value))
     client = FakeEditClient()
     context = build_context(client=client)
     commands.register(client, context)
@@ -409,12 +403,12 @@ async def test_aicheck_toggles_and_persists(monkeypatch):
     await handler(on_event)
     assert context.fixer.autocheck_enabled is True
     assert saved["value"] is True
-    assert any("включ" in text for text in on_event.responses)
+    assert any("увімкнено" in text for text in on_event.responses)
     off_event = FakeFixEvent(".aicheck off")
     await handler(off_event)
     assert context.fixer.autocheck_enabled is False
     assert saved["value"] is False
-    assert any("выключ" in text for text in off_event.responses)
+    assert any("вимкнено" in text for text in off_event.responses)
 
 
 @pytest.mark.asyncio
@@ -424,4 +418,4 @@ async def test_fix_help_lists_custom_request():
     commands.register(client, context)
     event = FakeFixEvent(".fix help")
     await fix_handler(client)(event)
-    assert any("просьба" in text for text in event.responses)
+    assert any("прохання" in text for text in event.responses)

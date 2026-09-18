@@ -8,9 +8,9 @@ from trevoga.handlers.context import HandlerContext
 from trevoga.services.text_cleaner import (
     clean_text,
     detect_keywords,
-    format_post_html,
     label_links,
     matching_photos,
+    render_post,
     watermark,
 )
 from trevoga.services.watermark import apply_watermark
@@ -87,11 +87,7 @@ async def _autocheck_message(client, context: HandlerContext, message_id: int, t
     fixed = await context.fixer.autocheck(source)
     if not fixed or fixed.strip() == source.strip():
         return
-    body = format_post_html(fixed, context.rules)
-    links_html = "\n".join(label_links(fixed, context.rules))
-    mark = watermark()
-    parts = [part for part in (body, links_html, mark) if part]
-    edited = "\n\n".join(parts)
+    edited = render_post(fixed, context.rules, "\n".join(label_links(fixed, context.rules)))
     try:
         await client.edit_message(
             context.settings.group_c,
@@ -107,21 +103,13 @@ async def _autocheck_message(client, context: HandlerContext, message_id: int, t
 async def _forward_messages(messages, chat_id, client, context: HandlerContext):
     message = messages[0]
     text = clean_text(next((item.raw_text for item in messages if item.raw_text), ""))
-    body = format_post_html(text, context.rules)
     photos = matching_photos(text, context.rules)
-    links = label_links(text, context.rules)
-    links_html = "\n".join(links)
-    caption = (
-        f"{body}\n\n{links_html}\n\n{watermark()}"
-        if body and links_html
-        else f"{body}\n\n{watermark()}"
-        if body
-        else f"{links_html}\n\n{watermark()}"
-        if links_html and (photos or any(item.media for item in messages))
-        else watermark()
-        if photos or any(item.media for item in messages)
-        else ""
-    )
+    links_html = "\n".join(label_links(text, context.rules))
+    has_media = bool(photos) or any(item.media for item in messages)
+    caption = render_post(text, context.rules, links_html) if (text or links_html) else ""
+    # Без медиа и без текста подпись не нужна; при наличии медиа оставляем хотя бы вотермарку.
+    if not caption and has_media:
+        caption = watermark()
     context.statistics.repository.record(
         "to_c",
         source=str(chat_id),
@@ -157,8 +145,6 @@ async def _forward_messages(messages, chat_id, client, context: HandlerContext):
             )
         sent_message = sent[0] if isinstance(sent, list) else sent
         context.moderation.schedule_check(sent_message.id, text, caption)
-        context.moderation.schedule(
-            _autocheck_message(client, context, sent_message.id, text)
-        )
+        context.moderation.schedule(_autocheck_message(client, context, sent_message.id, text))
     except Exception:
         logger.exception("Failed to publish source message %s", message.id)

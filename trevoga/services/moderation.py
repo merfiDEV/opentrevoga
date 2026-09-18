@@ -10,16 +10,16 @@ from trevoga.models import ModerationResult
 logger = logging.getLogger(__name__)
 AI_MARK = "✅ Новина перевірена ШІ на корисність. ШІ може помилятися"
 MODERATION_PROMPT = (
-    "Ты — строгий фильтр новостей. Тебе дан текст поста из Telegram. "
-    "Определи, полезна ли эта новость жителям Донецкой области и переселенцам (ВПО). "
-    "Полезная новость: атаки БПЛА, ракет, КАБ, обстрелы, воздушная тревога, "
-    "эвакуация, укрытия и приюты, вода, электричество, газ, отопление, транспорт, "
-    "выплаты, документы, медицина, работа служб и важные официальные объявления. "
-    "Бесполезная новость: реклама, флуд, слухи без деталей, развлечения, спорт, "
-    "политика без местной практической пользы. Верни только JSON без markdown: "
+    "Ти — суворий фільтр новин. Тобі дано текст поста з Telegram. "
+    "Визнач, чи корисна ця новина мешканцям Донецької області та переселенцям (ВПО). "
+    "Корисна новина: атаки БПЛА, ракет, КАБ, обстріли, повітряна тривога, "
+    "евакуація, укриття та притулки, вода, електрика, газ, опалення, транспорт, "
+    "виплати, документи, медицина, робота служб і важливі офіційні оголошення. "
+    "Некорисна новина: реклама, флуд, чутки без деталей, розваги, спорт, "
+    "політика без місцевої практичної користі. Поверни лише JSON без markdown: "
     '{"useful":true|false,"reason":"advertising|no_local_value|no_specifics|'
-    'unconfirmed_rumor|irrelevant|other","reason_text":"краткая причина",'
-    '"confidence":0.0}. Для полезной новости reason должен быть null.'
+    'unconfirmed_rumor|irrelevant|other","reason_text":"коротка причина",'
+    '"confidence":0.0}. Для корисної новини reason має бути null.'
 )
 FIX_PROMPT = (
     "Ти — редактор новин українською мовою. Перепиши текст грамотною українською, "
@@ -31,8 +31,7 @@ FIX_PROMPT = (
 FIX_PROMPTS = {
     "default": FIX_PROMPT,
     "short": FIX_PROMPT + " Зроби текст максимально коротким, зберігши ключові факти.",
-    "urgent": FIX_PROMPT
-    + " Подай як коротке оперативне повідомлення: загроза, місце, час.",
+    "urgent": FIX_PROMPT + " Подай як коротке оперативне повідомлення: загроза, місце, час.",
     "official": FIX_PROMPT + " Використовуй сухий офіційний стиль без емоцій.",
     "neutral": FIX_PROMPT + " Використовуй нейтральний інформаційний стиль.",
 }
@@ -123,15 +122,11 @@ def parse_result(message_id: int, content: str) -> ModerationResult:
 
 def insert_ai_mark(caption: str) -> str:
     head, separator, tail = caption.rstrip().rpartition("\n")
-    return (
-        f"{head}{separator}{AI_MARK}\n{tail}" if separator else f"{AI_MARK}\n{caption}"
-    )
+    return f"{head}{separator}{AI_MARK}\n{tail}" if separator else f"{AI_MARK}\n{caption}"
 
 
 class ModerationService:
-    def __init__(
-        self, client: AIClient, fix_client: AIClient, enabled: bool, delay: float
-    ):
+    def __init__(self, client: AIClient, fix_client: AIClient, enabled: bool, delay: float):
         self.client = client
         self.fix_client = fix_client
         self.enabled = enabled
@@ -139,9 +134,7 @@ class ModerationService:
         self.tasks: set[asyncio.Task] = set()
 
     async def moderate(self, message_id: int, text: str) -> ModerationResult:
-        return parse_result(
-            message_id, await self.client.complete(MODERATION_PROMPT, text)
-        )
+        return parse_result(message_id, await self.client.complete(MODERATION_PROMPT, text))
 
     async def approve(self, text: str) -> bool:
         return (await self.moderate(0, text)).useful
