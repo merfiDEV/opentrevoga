@@ -10,6 +10,7 @@ HELP_TEXT = """<blockquote>=== КОМАНДИ АДМІНІСТРАТОРА ===
 .fix [short|urgent|official|neutral] | .fix test | .fix <прохання> | .fix undo | .fix help
 .stats | .stats 12 | .stats 24
 .ai_reason [MESSAGE_ID] або відповіддю на повідомлення
+.health — стан бота (uptime, AI, БД, FloodWait, остання помилка)
 .відміна | .delete | .видалити
 .help
 
@@ -78,6 +79,20 @@ UNSUB_FORMAT = "<blockquote>Формат: .unsub СЛОВО | .unsub all</blockq
 UNSUB_ALL = "<blockquote>Скинуто підписок: {count}</blockquote>"
 UNSUB_REMOVED = "<blockquote>Підписку на «{word}» видалено</blockquote>"
 UNSUB_MISSING = "<blockquote>Підписку на «{word}» не знайдено</blockquote>"
+
+# --- .health ---
+HEALTH_TEXT = (
+    "<blockquote>🩺 Стан бота\n\n"
+    "⏱ Uptime: {uptime}\n"
+    "🤖 AI: {ai_status}\n"
+    "🌊 FloodWait: {floodwait}\n"
+    "💾 БД: {db_size}\n"
+    "🕒 Остання помилка: {last_error}</blockquote>"
+)
+HEALTH_AI_OK = "доступний ✅"
+HEALTH_AI_DOWN = "недоступний ❌ ({error})"
+HEALTH_NO_ERROR = "немає"
+HEALTH_DB_MISSING = "немає"
 
 # --- .ai_reason ---
 AI_REASON_MISSING = "<blockquote>Результат AI-перевірки не знайдено</blockquote>"

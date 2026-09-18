@@ -5,6 +5,7 @@ from telethon.errors import FloodWaitError
 from telethon.tl.types import Channel
 
 from trevoga.config import Settings
+from trevoga.health import record_floodwait
 from trevoga.storage.repositories import ForwardedPostRepository, StatisticsRepository
 
 
@@ -31,6 +32,7 @@ class PublishingService:
             try:
                 return await factory()
             except FloodWaitError as error:
+                record_floodwait()
                 logger.warning("FloodWait: sleeping %s seconds", error.seconds)
                 await asyncio.sleep(error.seconds)
 
@@ -50,9 +52,7 @@ class PublishingService:
                 forwarded = forwarded if isinstance(forwarded, list) else [forwarded]
                 references[str(target)] = forwarded[0].id
             except Exception:
-                logger.exception(
-                    "Failed to forward message %s to %s", primary.id, target
-                )
+                logger.exception("Failed to forward message %s to %s", primary.id, target)
         for target in self._valid_channel_targets:
             try:
                 sent = await self._with_flood_wait(
@@ -60,9 +60,7 @@ class PublishingService:
                 )
                 references[str(target)] = sent[0].id
             except Exception:
-                logger.exception(
-                    "Failed to publish message %s to channel %s", primary.id, target
-                )
+                logger.exception("Failed to publish message %s to channel %s", primary.id, target)
         self.posts.save_main(primary.id, references)
         self.stats.record("to_d", message_id=primary.id)
         return references
@@ -78,15 +76,12 @@ class PublishingService:
                 permissions = await self.client.get_permissions(entity, "me")
                 admin_rights = permissions.participant.admin_rights
                 if not permissions.is_admin or not (
-                    permissions.is_creator
-                    or (admin_rights and admin_rights.post_messages)
+                    permissions.is_creator or (admin_rights and admin_rights.post_messages)
                 ):
                     raise PermissionError("account has no post_messages admin right")
                 valid.append(target)
             except Exception:
-                logger.exception(
-                    "Channel target %s is unavailable for publishing", target
-                )
+                logger.exception("Channel target %s is unavailable for publishing", target)
         self._valid_channel_targets = tuple(valid)
 
     async def _send_to_channel(self, target, messages):

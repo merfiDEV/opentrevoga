@@ -5,6 +5,8 @@ __pycache__/
 *.session
 *.session-journal
 *.zip
+*.log
+*.log.*
 .env
 venv/
 stats.json

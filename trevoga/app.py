@@ -1,9 +1,11 @@
 import asyncio
 import contextlib
 import logging
+from logging.handlers import RotatingFileHandler
 
 from telethon import utils
 
+from trevoga import health
 from trevoga.config import load_settings
 from trevoga.handlers.comments import register as register_comments
 from trevoga.handlers.channel_moderation import register as register_channel_moderation
@@ -27,11 +29,30 @@ from trevoga.storage.repositories import (
 )
 
 
+def _setup_logging(log_path) -> None:
+    """Log to stdout and a rotating file; remember the last ERROR in memory."""
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    stream = logging.StreamHandler()
+    stream.setFormatter(formatter)
+    root.addHandler(stream)
+    try:
+        file_handler = RotatingFileHandler(
+            log_path, maxBytes=5 * 1024 * 1024, backupCount=5, encoding="utf-8"
+        )
+        file_handler.setFormatter(formatter)
+        root.addHandler(file_handler)
+    except OSError as error:
+        root.warning("File logging disabled: %s", error)
+    error_handler = health.LastErrorHandler()
+    error_handler.setFormatter(formatter)
+    root.addHandler(error_handler)
+
+
 async def run():
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
     settings = load_settings()
+    _setup_logging(settings.log_path)
     set_watermark(settings.watermark_enabled)
     settings.validate()
     database = Database(settings.database_path)

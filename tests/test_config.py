@@ -14,6 +14,7 @@ def test_invalid_settings_are_rejected(tmp_path):
         admin_ids=(),
         database_path=tmp_path / "db",
         session_path=tmp_path / "session",
+        log_path=tmp_path / "log",
         assets_dir=tmp_path,
         ai_mode=False,
         ai_api_base="http://localhost/v1",

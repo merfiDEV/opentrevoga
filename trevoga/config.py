@@ -37,6 +37,7 @@ class Settings:
     admin_ids: tuple[int, ...]
     database_path: Path
     session_path: Path
+    log_path: Path
     assets_dir: Path
     ai_mode: bool
     ai_api_base: str
@@ -65,6 +66,20 @@ class Settings:
             errors.append("GROUP_C is required")
         if not self.group_d_targets:
             errors.append("GROUP_D_TARGETS must contain at least one target")
+        if not self.channel_targets and not self.group_d_targets:
+            errors.append("at least one of CHANNEL_TARGETS or GROUP_D_TARGETS is required")
+        if not self.admin_ids:
+            errors.append("ADMIN_IDS must contain at least one admin id")
+        if not self.ai_api_base.startswith(("http://", "https://")):
+            errors.append("AI_API_BASE must be an http(s) URL")
+        if not self.ai_fix_api_base.startswith(("http://", "https://")):
+            errors.append("AI_FIX_API_BASE must be an http(s) URL")
+        if self.ai_timeout <= 0:
+            errors.append("AI_TIMEOUT must be positive")
+        if self.ai_fix_timeout <= 0:
+            errors.append("AI_FIX_TIMEOUT must be positive")
+        if self.ai_check_delay < 0:
+            errors.append("AI_CHECK_DELAY must not be negative")
         if errors:
             raise ValueError("Invalid configuration: " + "; ".join(errors))
 
@@ -99,6 +114,7 @@ def load_settings() -> Settings:
         ),
         database_path=BASE_DIR / os.getenv("DATABASE_FILE_NAME", "trevoga.db"),
         session_path=BASE_DIR / os.getenv("SESSION_FILE_NAME", "session"),
+        log_path=BASE_DIR / os.getenv("LOG_FILE_NAME", "trevoga.log"),
         assets_dir=BASE_DIR / "asseti",
         ai_mode=_env_flag("AI_MODE"),
         ai_api_base=ai_base,

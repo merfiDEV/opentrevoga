@@ -1,8 +1,9 @@
 import html
+from datetime import datetime
 
 from telethon import events
 
-from trevoga import i18n
+from trevoga import health, i18n
 from trevoga.config import (
     save_aicheck,
     save_ai_model,
@@ -250,6 +251,36 @@ def register(client, context: HandlerContext):
     @command(context)
     async def help_command(event):
         await event.respond(i18n.HELP_TEXT, parse_mode="html")
+
+    @client.on(events.NewMessage(chats=context.settings.group_c, pattern=r"^\.health\s*$"))
+    @command(context, admin=True)
+    async def health_command(event):
+        available, response = await context.moderation.check_available()
+        ai_status = (
+            i18n.HEALTH_AI_OK
+            if available
+            else i18n.HEALTH_AI_DOWN.format(error=html.escape(str(response)))
+        )
+        try:
+            db_size = health.format_bytes(context.settings.database_path.stat().st_size)
+        except OSError:
+            db_size = i18n.HEALTH_DB_MISSING
+        message, timestamp = health.last_error()
+        if message:
+            when = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+            last_error = f"{when} — {html.escape(message)}"
+        else:
+            last_error = i18n.HEALTH_NO_ERROR
+        await event.respond(
+            i18n.HEALTH_TEXT.format(
+                uptime=health.format_uptime(health.uptime_seconds()),
+                ai_status=ai_status,
+                floodwait=health.floodwait_count(),
+                db_size=db_size,
+                last_error=last_error,
+            ),
+            parse_mode="html",
+        )
 
     @client.on(events.NewMessage(pattern=r"^\.sub(?:\s+(.+))?\s*$"))
     @command(context)
