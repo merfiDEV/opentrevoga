@@ -93,10 +93,14 @@ class PublishingService:
                     message.media,
                     caption=message.message or "",
                     formatting_entities=message.entities,
+                    link_preview=False,
                 )
             else:
                 sent = await self.client.send_message(
-                    target, message.message or "", formatting_entities=message.entities
+                    target,
+                    message.message or "",
+                    formatting_entities=message.entities,
+                    link_preview=False,
                 )
             return sent if isinstance(sent, list) else [sent]
         sent = await self.client.send_file(
@@ -104,6 +108,7 @@ class PublishingService:
             [message.media for message in messages],
             caption=[message.message or "" for message in messages],
             formatting_entities=[message.entities for message in messages],
+            link_preview=False,
         )
         return sent if isinstance(sent, list) else [sent]
 
