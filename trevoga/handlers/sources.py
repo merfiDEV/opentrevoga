@@ -45,22 +45,21 @@ async def _notify_subscribers(text, caption, messages, client, context: HandlerC
                 notified.add(user_id)
                 try:
                     media = [item.media for item in messages if item.media]
-                    if not media:
-                        media = matching_photos(text, context.rules)
-                        if media:
-                            with tempfile.TemporaryDirectory(prefix="trevoga-sub-") as directory:
-                                watermarked_media = []
-                                for photo in media:
-                                    output = Path(directory) / f"watermarked-{photo.name}"
-                                    await apply_watermark(photo, output)
-                                    watermarked_media.append(output)
-                                await client.send_file(
-                                    user_id,
-                                    watermarked_media,
-                                    caption=caption,
-                                    parse_mode="html",
-                                    link_preview=False,
-                                )
+                    fallback = matching_photos(text, context.rules) if not media else []
+                    if fallback:
+                        with tempfile.TemporaryDirectory(prefix="trevoga-sub-") as directory:
+                            watermarked_media = []
+                            for photo in fallback:
+                                output = Path(directory) / f"watermarked-{photo.name}"
+                                await apply_watermark(photo, output)
+                                watermarked_media.append(output)
+                            await client.send_file(
+                                user_id,
+                                watermarked_media,
+                                caption=caption,
+                                parse_mode="html",
+                                link_preview=False,
+                            )
                     elif media:
                         await client.send_file(
                             user_id,
