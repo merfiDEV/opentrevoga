@@ -1,5 +1,6 @@
 import logging
 import tempfile
+import time
 from pathlib import Path
 
 from telethon import events
@@ -18,27 +19,46 @@ from trevoga.services.watermark import apply_watermark
 
 logger = logging.getLogger(__name__)
 
+# Окно, у межах якого повторне спрацювання того ж ключового слова не надсилається
+# підписникам (перше повідомлення перемагає).
+SUBSCRIBE_DEDUP_SECONDS = 60
+
 
 def register(client, context: HandlerContext):
-    @client.on(events.NewMessage(chats=context.settings.source_channels))
+    # keyword -> monotonic timestamp останнього надісланого сповіщення
+    notify_state: dict[str, float] = {}
+
+    @client.on(events.NewMessage())
     async def forward_to_group_c(event):
+        if event.chat_id not in context.source_channels:
+            return
         # Album items also emit NewMessage events; the Album handler publishes them together.
         if event.message.grouped_id:
             return
-        await _forward_messages([event.message], event.chat_id, client, context)
+        await _forward_messages([event.message], event.chat_id, client, context, notify_state)
 
-    @client.on(events.Album(chats=context.settings.source_channels))
+    @client.on(events.Album())
     async def forward_album_to_group_c(event):
-        await _forward_messages(event.messages, event.chat_id, client, context)
+        if event.chat_id not in context.source_channels:
+            return
+        await _forward_messages(event.messages, event.chat_id, client, context, notify_state)
 
 
-async def _notify_subscribers(text, caption, messages, client, context: HandlerContext):
+async def _notify_subscribers(
+    text, caption, messages, client, context: HandlerContext, notify_state: dict[str, float]
+):
     if not context.subscriptions:
         return
     lowered = text.lower()
     notified = set()
+    now = time.monotonic()
     for keyword in context.subscriptions.all_keywords():
         if keyword in lowered:
+            last_sent = notify_state.get(keyword)
+            if last_sent is not None and now - last_sent < SUBSCRIBE_DEDUP_SECONDS:
+                # Про це саме ключове слово вже сповіщали в межах вікна — пропускаємо.
+                continue
+            notify_state[keyword] = now
             for user_id in context.subscriptions.find_by_keyword(keyword):
                 if user_id in notified:
                     continue
@@ -99,7 +119,7 @@ async def _autocheck_message(client, context: HandlerContext, message_id: int, t
         logger.exception("AI autocheck edit failed for %s", message_id)
 
 
-async def _forward_messages(messages, chat_id, client, context: HandlerContext):
+async def _forward_messages(messages, chat_id, client, context: HandlerContext, notify_state):
     message = messages[0]
     text = clean_text(next((item.raw_text for item in messages if item.raw_text), ""))
     photos = matching_photos(text, context.rules)
@@ -114,7 +134,7 @@ async def _forward_messages(messages, chat_id, client, context: HandlerContext):
         source=str(chat_id),
         keywords=detect_keywords(text, context.rules),
     )
-    await _notify_subscribers(text, caption, messages, client, context)
+    await _notify_subscribers(text, caption, messages, client, context, notify_state)
     try:
         if photos:
             with tempfile.TemporaryDirectory(prefix="trevoga-source-") as directory:

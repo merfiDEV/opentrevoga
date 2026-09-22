@@ -1,7 +1,7 @@
 import html
 from datetime import datetime
 
-from telethon import events
+from telethon import events, utils
 
 from trevoga import health, i18n
 from trevoga.config import (
@@ -9,6 +9,7 @@ from trevoga.config import (
     save_ai_model,
     save_cards,
     save_ignored_channels,
+    save_source_channels,
     save_watermark,
 )
 from trevoga.handlers.context import HandlerContext
@@ -263,6 +264,46 @@ def register(client, context: HandlerContext):
         )
         if status:
             await event.respond(status, parse_mode="html")
+
+    @client.on(
+        events.NewMessage(
+            chats=context.settings.group_c,
+            pattern=r"^\.addchannel(?:\s+(add|del|list)(?:\s+(.+))?)?\s*$",
+        )
+    )
+    @command(context, admin=True)
+    async def addchannel(event):
+        action = (event.pattern_match.group(1) or "list").lower()
+        value = (event.pattern_match.group(2) or "").strip()
+        if action == "list":
+            channels = sorted(context.source_channels)
+            response = i18n.ADDCHAN_LIST.format(
+                channels=", ".join(str(channel) for channel in channels)
+                if channels
+                else i18n.ADDCHAN_NONE
+            )
+        elif not value:
+            response = i18n.ADDCHAN_FORMAT
+        else:
+            try:
+                target = int(value) if value.lstrip("-").isdigit() else value
+                entity = await client.get_entity(target)
+                channel_id = utils.get_peer_id(entity)
+                if action == "add":
+                    if channel_id not in context.source_channels:
+                        context.source_channels.add(channel_id)
+                        save_source_channels(tuple(sorted(context.source_channels)))
+                    response = i18n.ADDCHAN_ADDED.format(channel_id=channel_id)
+                else:
+                    if channel_id in context.source_channels:
+                        context.source_channels.discard(channel_id)
+                        save_source_channels(tuple(sorted(context.source_channels)))
+                        response = i18n.ADDCHAN_REMOVED.format(channel_id=channel_id)
+                    else:
+                        response = i18n.ADDCHAN_MISSING.format(channel_id=channel_id)
+            except Exception as error:
+                response = i18n.ADDCHAN_NOT_FOUND.format(error=html.escape(str(error)))
+        await event.respond(f"<blockquote>{response}</blockquote>", parse_mode="html")
 
     @client.on(events.NewMessage(pattern=r"^\.help\s*$"))
     @command(context)

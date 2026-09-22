@@ -92,6 +92,7 @@ async def run():
     await client.start()
     await publisher.validate_channel_targets()
     entity = await client.get_entity(settings.group_c)
+    source_channels = await _resolve_source_channels(client, settings)
     context = HandlerContext(
         client,
         settings,
@@ -103,6 +104,7 @@ async def run():
         moderation_repository,
         subscription_repository,
         set(settings.ignored_channels),
+        source_channels,
         fixer,
     )
 
@@ -146,6 +148,21 @@ async def run():
         await moderation.drain()
         await moderation.aclose()
         await client.disconnect()
+
+
+async def _resolve_source_channels(client, settings) -> set[int]:
+    """Resolve configured SOURCE_CHANNELS entries to canonical peer ids."""
+    resolved: set[int] = set()
+    for value in settings.source_channels:
+        try:
+            target = int(value) if value.lstrip("-").isdigit() else value
+            entity = await client.get_entity(target)
+            resolved.add(utils.get_peer_id(entity))
+        except Exception as error:
+            logging.getLogger(__name__).warning(
+                "Failed to resolve source channel %s: %s", value, error
+            )
+    return resolved
 
 
 async def _cleanup_loop(repository):

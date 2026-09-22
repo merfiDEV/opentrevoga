@@ -188,3 +188,7 @@ def save_aicheck(enabled: bool) -> None:
 
 def save_ignored_channels(channels: tuple[int, ...] | list[int]) -> None:
     _write_env("CIGNORE_CHANNELS", ",".join(str(channel) for channel in channels))
+
+
+def save_source_channels(channels: tuple[int, ...] | list[int]) -> None:
+    _write_env("SOURCE_CHANNELS", ",".join(str(channel) for channel in channels))

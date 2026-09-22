@@ -13,6 +13,7 @@ HELP_ADMIN = """<blockquote>=== КОМАНДИ АДМІНІСТРАТОРА ===
 .wmark | .wmark on | .wmark off
 .aicheck | .aicheck on | .aicheck off
 .cignore [ID or @name] | .cignore off | .cignore list
+.addchannel add|del|list [ID or @name]
 .fix [short|urgent|official|neutral] | .fix test | .fix <прохання> | .fix undo | .fix help
 .stats | .stats 12 | .stats 24
 .ai_reason [MESSAGE_ID] або відповіддю на повідомлення
@@ -103,6 +104,15 @@ HEALTH_AI_OK = "доступний ✅"
 HEALTH_AI_DOWN = "недоступний ❌ ({error})"
 HEALTH_NO_ERROR = "немає"
 HEALTH_DB_MISSING = "немає"
+
+# --- .addchannel ---
+ADDCHAN_FORMAT = "<blockquote>Формат: .addchannel add|del|list [ID або @name]</blockquote>"
+ADDCHAN_LIST = "<blockquote>Канали-джерела: {channels}</blockquote>"
+ADDCHAN_NONE = "немає"
+ADDCHAN_ADDED = "<blockquote>✅ Канал додано до відстеження: {channel_id}</blockquote>"
+ADDCHAN_REMOVED = "<blockquote>🗑 Канал прибрано з відстеження: {channel_id}</blockquote>"
+ADDCHAN_MISSING = "<blockquote>ℹ️ Канал не знайдено серед відстежуваних: {channel_id}</blockquote>"
+ADDCHAN_NOT_FOUND = "<blockquote>⚠️ Не вдалося знайти канал: {error}</blockquote>"
 
 # --- .ai_reason ---
 AI_REASON_MISSING = "<blockquote>Результат AI-перевірки не знайдено</blockquote>"
