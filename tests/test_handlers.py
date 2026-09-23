@@ -419,3 +419,25 @@ async def test_fix_help_lists_custom_request():
     event = FakeFixEvent(".fix help")
     await fix_handler(client)(event)
     assert any("прохання" in text for text in event.responses)
+
+
+@pytest.mark.asyncio
+async def test_truncate_caption_keeps_short_text():
+    caption = "короткий текст"
+    assert sources._truncate_caption(caption) == caption
+
+
+def test_truncate_caption_closes_open_tags():
+    caption = "<blockquote>" + "х" * 2000 + "</blockquote>"
+    result = sources._truncate_caption(caption)
+    assert len(result) <= 1024
+    assert result.startswith("<blockquote>")
+    assert result.count("<blockquote>") == result.count("</blockquote>")
+    assert result.endswith("</blockquote>")
+
+
+def test_truncate_caption_handles_no_html():
+    caption = "a" * 2000
+    result = sources._truncate_caption(caption)
+    assert len(result) <= 1024
+    assert "…" in result

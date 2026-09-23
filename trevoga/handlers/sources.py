@@ -1,4 +1,5 @@
 import logging
+import re
 import tempfile
 import time
 from pathlib import Path
@@ -6,6 +7,7 @@ from pathlib import Path
 from telethon import events
 
 from trevoga.handlers.context import HandlerContext
+from trevoga.services.fix_service import CAPTION_LIMIT
 from trevoga.services.text_cleaner import (
     clean_text,
     detect_keywords,
@@ -22,6 +24,38 @@ logger = logging.getLogger(__name__)
 # Окно, у межах якого повторне спрацювання того ж ключового слова не надсилається
 # підписникам (перше повідомлення перемагає).
 SUBSCRIBE_DEDUP_SECONDS = 60
+
+_TAG_RE = re.compile(r"<(/?)([a-zA-Z][a-zA-Z0-9]*)(?:\s[^>]*)?>")
+_VOID_TAGS = {"br", "hr", "img", "input", "meta", "link"}
+
+
+def _close_open_tags(text: str) -> str:
+    """Возвращает закрывающие теги для всех незакрытых HTML-тегов в text."""
+    stack: list[str] = []
+    for match in _TAG_RE.finditer(text):
+        is_close, name = match.group(1) == "/", match.group(2).lower()
+        if name in _VOID_TAGS:
+            continue
+        if is_close:
+            for index in range(len(stack) - 1, -1, -1):
+                if stack[index] == name:
+                    del stack[index:]
+                    break
+        else:
+            stack.append(name)
+    return "".join(f"</{name}>" for name in reversed(stack))
+
+
+def _truncate_caption(caption: str, limit: int = CAPTION_LIMIT) -> str:
+    """Обрезает подпись до лимита Telegram, не разрывая HTML-теги."""
+    if len(caption) <= limit:
+        return caption
+    budget = max(0, limit - 32)
+    cut = caption[:budget]
+    last_open = cut.rfind("<")
+    if last_open > cut.rfind(">"):
+        cut = cut[:last_open]
+    return f"{cut.rstrip()}…{_close_open_tags(cut)}"
 
 
 def register(client, context: HandlerContext):
@@ -66,6 +100,7 @@ async def _notify_subscribers(
                 try:
                     media = [item.media for item in messages if item.media]
                     fallback = matching_photos(text, context.rules) if not media else []
+                    media_caption = _truncate_caption(caption)
                     if fallback:
                         with tempfile.TemporaryDirectory(prefix="trevoga-sub-") as directory:
                             watermarked_media = []
@@ -76,7 +111,7 @@ async def _notify_subscribers(
                             await client.send_file(
                                 user_id,
                                 watermarked_media,
-                                caption=caption,
+                                caption=media_caption,
                                 parse_mode="html",
                                 link_preview=False,
                             )
@@ -84,7 +119,7 @@ async def _notify_subscribers(
                         await client.send_file(
                             user_id,
                             media,
-                            caption=caption,
+                            caption=media_caption,
                             parse_mode="html",
                             link_preview=False,
                         )
@@ -135,6 +170,7 @@ async def _forward_messages(messages, chat_id, client, context: HandlerContext, 
         keywords=detect_keywords(text, context.rules),
     )
     await _notify_subscribers(text, caption, messages, client, context, notify_state)
+    media_caption = _truncate_caption(caption)
     try:
         if photos:
             with tempfile.TemporaryDirectory(prefix="trevoga-source-") as directory:
@@ -146,7 +182,7 @@ async def _forward_messages(messages, chat_id, client, context: HandlerContext, 
                 sent = await client.send_file(
                     context.settings.group_c,
                     watermarked_photos,
-                    caption=caption,
+                    caption=media_caption,
                     parse_mode="html",
                     link_preview=False,
                 )
@@ -154,7 +190,7 @@ async def _forward_messages(messages, chat_id, client, context: HandlerContext, 
             sent = await client.send_file(
                 context.settings.group_c,
                 [item.media for item in messages if item.media],
-                caption=caption,
+                caption=media_caption,
                 parse_mode="html",
                 link_preview=False,
             )
