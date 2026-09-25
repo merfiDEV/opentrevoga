@@ -14,6 +14,12 @@ class SubscriptionStore:
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path)
         connection.row_factory = sqlite3.Row
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS user_hint_settings ("
+            "user_id INTEGER PRIMARY KEY, "
+            "photo_on INTEGER NOT NULL DEFAULT 1, "
+            "wiki_on INTEGER NOT NULL DEFAULT 1)"
+        )
         return connection
 
     def add(self, user_id: int, keyword: str) -> None:
@@ -77,3 +83,24 @@ class SubscriptionStore:
         with self._connect() as connection:
             row = connection.execute("SELECT COUNT(*) FROM subscriptions").fetchone()
         return row[0] if row else 0
+
+    def hint_settings(self, user_id: int) -> tuple[bool, bool]:
+        """Возвращает (photo_on, wiki_on). По умолчанию оба включены."""
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT photo_on, wiki_on FROM user_hint_settings WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+        if row is None:
+            return True, True
+        return bool(row["photo_on"]), bool(row["wiki_on"])
+
+    def set_hint_settings(self, user_id: int, photo_on: bool, wiki_on: bool) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO user_hint_settings (user_id, photo_on, wiki_on) "
+                "VALUES (?, ?, ?) "
+                "ON CONFLICT(user_id) DO UPDATE SET photo_on = excluded.photo_on, "
+                "wiki_on = excluded.wiki_on",
+                (user_id, int(photo_on), int(wiki_on)),
+            )

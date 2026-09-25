@@ -4,11 +4,13 @@ import asyncio
 import html
 import logging
 import re
+from pathlib import Path
 
 from aiogram import Bot
 from aiogram.types import InputMediaPhoto, InputMediaVideo, LinkPreviewOptions
 
 from botsrc.storage import SubscriptionStore
+from trevoga.services.text_cleaner import photo_rules
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +22,97 @@ SUBSCRIBE_MAX_TEXT_LENGTH = 250
 ALBUM_DEBOUNCE_SECONDS = 1.5
 
 _TAG_RE = re.compile(r"<[^>]+>")
+
+# Транслитерация укр/рос → латиница. Обе стороны (keyword и текст поста)
+# приводятся к единой латинской форме, чтобы 'odesa' == 'одеса',
+# 'izmail' == 'ізмаїл' / 'измаил'. Сравнение идёт по lowercase.
+_TRANSLIT = str.maketrans(
+    {
+        "а": "a",
+        "б": "b",
+        "в": "v",
+        "г": "g",
+        "ґ": "g",
+        "д": "d",
+        "е": "e",
+        "є": "ie",
+        "ё": "e",
+        "ж": "zh",
+        "з": "z",
+        "и": "i",
+        "і": "i",
+        "ї": "i",
+        "й": "i",
+        "к": "k",
+        "л": "l",
+        "м": "m",
+        "н": "n",
+        "о": "o",
+        "п": "p",
+        "р": "r",
+        "с": "s",
+        "т": "t",
+        "у": "u",
+        "ф": "f",
+        "х": "h",
+        "ц": "ts",
+        "ч": "ch",
+        "ш": "sh",
+        "щ": "shch",
+        "ъ": "",
+        "ы": "y",
+        "ь": "",
+        "э": "e",
+        "ю": "iu",
+        "я": "ia",
+        "’": "",
+        "'": "",
+    }
+)
+
+
+def fold_homoglyphs(text: str) -> str:
+    """Приводит текст к латинской форме для сравнения ключевых слов.
+
+    Транслитерирует кириллицу, оставляя латиницу как есть, чтобы подписки
+    в любой раскладке ('odesa' и 'одеса') совпадали.
+    """
+    return text.lower().translate(_TRANSLIT)
+
+
+# Лейблы подсказок-карточек (label, wiki-url) — из photo_rules юзербота.
+_CARD_RULES = [(label, url) for _keywords, _path, label, url in photo_rules(Path(".")) if url]
+
+
+def card_label(message) -> str | None:
+    """Возвращает label карточки, если сообщение содержит её wiki-ссылку."""
+    text = message.html_text or message.caption or message.text or ""
+    if not text:
+        return None
+    for label, url in _CARD_RULES:
+        if url in text:
+            return label
+    return None
+
+
+def _card_link(url: str, label: str) -> str:
+    """HTML-ссылка на Википедию такой же формы, как в label_links юзербота."""
+    return f'<a href="{url}">{label}</a>'
+
+
+def strip_card_links(caption: str, label: str | None) -> str:
+    """Убирает из caption строки со ссылкой подсказки (сам текст поста остаётся)."""
+    if not caption or not label:
+        return caption
+    urls = [url for rule_label, url in _CARD_RULES if rule_label == label]
+    if not urls:
+        return caption
+    kept = []
+    for line in caption.splitlines():
+        if any(_card_link(url, label) in line for url in urls):
+            continue
+        kept.append(line)
+    return "\n".join(kept).strip()
 
 
 def _plain_text(message) -> str:
@@ -82,8 +175,10 @@ class Broadcaster:
             return
         if len(text) > SUBSCRIBE_MAX_TEXT_LENGTH:
             return
-        lowered = text.lower()
-        matched = [keyword for keyword in self.store.all_keywords() if keyword in lowered]
+        lowered = fold_homoglyphs(text)
+        matched = [
+            keyword for keyword in self.store.all_keywords() if fold_homoglyphs(keyword) in lowered
+        ]
         if not matched:
             return
 
@@ -105,9 +200,28 @@ class Broadcaster:
             except Exception:
                 logger.exception("Failed to notify subscriber %s", user_id)
 
+    def _mute_flags(self, user_id: int, messages: list) -> tuple[str | None, bool, bool]:
+        """Возвращает (label, photo_off, wiki_off) для сообщения и пользователя."""
+        label = card_label(messages[0])
+        if not label:
+            return None, False, False
+        photo_on, wiki_on = self.store.hint_settings(user_id)
+        return label, not photo_on, not wiki_on
+
     async def _send_to_user(self, user_id: int, messages: list) -> None:
         caption = _html_text(messages[0])
         no_preview = LinkPreviewOptions(is_disabled=True)
+        label, photo_off, wiki_off = self._mute_flags(user_id, messages)
+        if label and wiki_off:
+            caption = strip_card_links(caption, label)
+        if label and photo_off:
+            await self.bot.send_message(
+                user_id,
+                caption or _plain_text(messages[0]),
+                parse_mode="HTML",
+                link_preview_options=no_preview,
+            )
+            return
         if len(messages) == 1:
             message = messages[0]
             if message.photo:

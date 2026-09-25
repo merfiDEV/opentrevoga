@@ -22,11 +22,32 @@ __all__ = [
     "HELP",
     "BTN_MY_SUBS",
     "BTN_HELP",
+    "BTN_SETTINGS",
+    "SETTINGS_TITLE",
+    "SETTINGS_PHOTO_ON",
+    "SETTINGS_PHOTO_OFF",
+    "SETTINGS_WIKI_ON",
+    "SETTINGS_WIKI_OFF",
+    "SETTINGS_DONE",
     "EMPTY_TEXT",
     "USERS_TITLE",
     "USERS_NO_KEYWORDS",
     "USERS_DENIED",
 ]
+
+BTN_SETTINGS = "⚙️ Налаштування"
+
+SETTINGS_TITLE = (
+    "<blockquote>⚙️ <b>Налаштування підказок</b>\n\n"
+    "Керуйте одразу всіма підказками: 📷 фото-картки та 🔗 посилання на Вікіпедію.\n"
+    "Сам текст поста приходить завжди."
+    "</blockquote>"
+)
+SETTINGS_PHOTO_ON = "✅ 📷 Фото-картки (усі)"
+SETTINGS_PHOTO_OFF = "❌ 📷 Фото-картки (усі)"
+SETTINGS_WIKI_ON = "✅ 🔗 Посилання на Вікіпедію (усі)"
+SETTINGS_WIKI_OFF = "❌ 🔗 Посилання на Вікіпедію (усі)"
+SETTINGS_DONE = "Готово ✅"
 
 WELCOME = (
     "<blockquote>👋 Привіт! Я бот сповіщень OpenTrevoga.\n\n"

@@ -8,7 +8,14 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
-from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    Message,
+    ReplyKeyboardMarkup,
+)
 
 from botsrc import i18n
 from botsrc.broadcast import Broadcaster
@@ -23,9 +30,22 @@ def _menu() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=i18n.BTN_MY_SUBS)],
+            [KeyboardButton(text=i18n.BTN_SETTINGS)],
             [KeyboardButton(text=i18n.BTN_HELP)],
         ],
         resize_keyboard=True,
+    )
+
+
+def _settings_keyboard(photo_on: bool, wiki_on: bool) -> InlineKeyboardMarkup:
+    photo_text = i18n.SETTINGS_PHOTO_ON if photo_on else i18n.SETTINGS_PHOTO_OFF
+    wiki_text = i18n.SETTINGS_WIKI_ON if wiki_on else i18n.SETTINGS_WIKI_OFF
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=photo_text, callback_data="hint:toggle:photo")],
+            [InlineKeyboardButton(text=wiki_text, callback_data="hint:toggle:wiki")],
+            [InlineKeyboardButton(text=i18n.SETTINGS_DONE, callback_data="hint:done")],
+        ]
     )
 
 
@@ -69,10 +89,17 @@ class SubscriberBot:
         dp.channel_post.register(self.on_channel_post)
         dp.message.register(self.on_group_post, F.chat.id == self.settings.group_c)
         dp.message.register(self.cmd_start, Command("start", "help"))
-        dp.message.register(self.on_menu_button, F.text.in_({i18n.BTN_MY_SUBS, i18n.BTN_HELP}))
+        dp.message.register(
+            self.on_menu_button,
+            F.text.in_({i18n.BTN_MY_SUBS, i18n.BTN_SETTINGS, i18n.BTN_HELP}),
+        )
         dp.message.register(self.on_sub, Command("sub"))
         dp.message.register(self.on_unsub, Command("unsub"))
+        dp.message.register(self.on_settings, Command("settings"))
         dp.message.register(self.cmd_users, Command("users"))
+        dp.callback_query.register(self.on_settings_toggle, F.data.startswith("hint:toggle:"))
+
+        dp.callback_query.register(self.on_settings_done, F.data == "hint:done")
 
     async def cmd_start(self, message: Message) -> None:
         await message.answer(i18n.WELCOME, reply_markup=_menu())
@@ -80,8 +107,33 @@ class SubscriberBot:
     async def on_menu_button(self, message: Message) -> None:
         if message.text == i18n.BTN_MY_SUBS:
             await message.answer(self.subscriptions(message.from_user.id), reply_markup=_menu())
+        elif message.text == i18n.BTN_SETTINGS:
+            await self.on_settings(message)
         else:
             await message.answer(i18n.HELP, reply_markup=_menu())
+
+    async def on_settings(self, message: Message) -> None:
+        photo_on, wiki_on = self.store.hint_settings(message.from_user.id)
+        await message.answer(
+            i18n.SETTINGS_TITLE,
+            reply_markup=_settings_keyboard(photo_on, wiki_on),
+        )
+
+    async def on_settings_toggle(self, callback: CallbackQuery) -> None:
+        _, _, kind = callback.data.split(":", 2)
+        user_id = callback.from_user.id
+        photo_on, wiki_on = self.store.hint_settings(user_id)
+        if kind == "photo":
+            photo_on = not photo_on
+        else:
+            wiki_on = not wiki_on
+        self.store.set_hint_settings(user_id, photo_on, wiki_on)
+        await callback.message.edit_reply_markup(reply_markup=_settings_keyboard(photo_on, wiki_on))
+        await callback.answer()
+
+    async def on_settings_done(self, callback: CallbackQuery) -> None:
+        await callback.message.delete()
+        await callback.answer()
 
     async def on_sub(self, message: Message) -> None:
         value = _parse_command(message.text, "sub")
