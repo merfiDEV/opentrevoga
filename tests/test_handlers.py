@@ -67,24 +67,6 @@ class FakeSettings:
     admin_ids = (1,)
 
 
-class FakeSubscriptions:
-    def __init__(self):
-        self.data = {}
-
-    def list_for_user(self, user_id):
-        return sorted(self.data.get(user_id, set()))
-
-    def add(self, user_id, keyword):
-        self.data.setdefault(user_id, set()).add(keyword)
-        return True
-
-    def remove(self, user_id, keyword):
-        return keyword in self.data.get(user_id, set()) and not self.data[user_id].discard(keyword)
-
-    def remove_all(self, user_id):
-        return len(self.data.pop(user_id, set()))
-
-
 class FakeModeration:
     def __init__(self, fixed=None):
         self.enabled = False
@@ -122,7 +104,6 @@ def build_context(**overrides):
         statistics=FakeStatistics(),
         group_c_peer_id=-1,
         moderation_results=None,
-        subscriptions=FakeSubscriptions(),
         ignored_channels=set(),
         fixer=FixService(moderation),
     )
@@ -238,18 +219,6 @@ async def test_comment_is_forwarded_to_targets():
     event = FakeCommentEvent("важное уточнение", FakeReplyMessage(7, "исходный текст"))
     await handler(event)
     assert publisher.posts.saved[7] == {"-100": 1}
-
-
-@pytest.mark.asyncio
-async def test_subscribe_adds_keyword():
-    client = FakeClient()
-    subscriptions = FakeSubscriptions()
-    context = build_context(client=client, subscriptions=subscriptions)
-    commands.register(client, context)
-    handler = next(h for h in client.handlers if h.__name__ == "subscribe")
-    event = FakeEvent(pattern_groups=["БПЛА"])
-    await handler(event)
-    assert "бпла" in subscriptions.list_for_user(1)
 
 
 @pytest.mark.asyncio

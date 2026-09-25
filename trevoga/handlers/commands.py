@@ -341,40 +341,6 @@ def register(client, context: HandlerContext):
             parse_mode="html",
         )
 
-    @client.on(events.NewMessage(pattern=r"^\.sub(?:\s+(.+))?\s*$"))
-    @command(context)
-    async def subscribe(event):
-        value = (event.pattern_match.group(1) or "").strip()
-        if not value:
-            keywords = context.subscriptions.list_for_user(event.sender_id)
-            text = i18n.SUB_LIST.format(
-                keywords=", ".join(html.escape(word) for word in keywords)
-                if keywords
-                else i18n.SUB_NONE
-            )
-        else:
-            normalized = value.lower()
-            context.subscriptions.add(event.sender_id, normalized)
-            text = i18n.SUB_ADDED.format(word=html.escape(normalized))
-        await event.respond(text, parse_mode="html")
-
-    @client.on(events.NewMessage(pattern=r"^\.unsub(?:\s+(.+))?\s*$"))
-    @command(context)
-    async def unsubscribe(event):
-        value = (event.pattern_match.group(1) or "").strip()
-        if not value:
-            text = i18n.UNSUB_FORMAT
-        elif value.lower() == "all":
-            removed = context.subscriptions.remove_all(event.sender_id)
-            text = i18n.UNSUB_ALL.format(count=removed)
-        else:
-            normalized = value.lower()
-            if context.subscriptions.remove(event.sender_id, normalized):
-                text = i18n.UNSUB_REMOVED.format(word=html.escape(normalized))
-            else:
-                text = i18n.UNSUB_MISSING.format(word=html.escape(normalized))
-        await event.respond(text, parse_mode="html")
-
     @client.on(
         events.NewMessage(chats=context.settings.group_c, pattern=r"^\.ai_reason(?:\s+(\d+))?\s*$")
     )

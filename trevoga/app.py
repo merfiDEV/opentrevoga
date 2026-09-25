@@ -25,7 +25,6 @@ from trevoga.storage.repositories import (
     ForwardedPostRepository,
     ModerationRepository,
     StatisticsRepository,
-    SubscriptionRepository,
 )
 
 
@@ -62,7 +61,6 @@ async def run():
     posts = ForwardedPostRepository(database)
     stats_repository = StatisticsRepository(database)
     moderation_repository = ModerationRepository(database)
-    subscription_repository = SubscriptionRepository(database)
     statistics = StatisticsService(stats_repository)
     moderation = ModerationService(
         AIClient(
@@ -102,7 +100,6 @@ async def run():
         statistics,
         utils.get_peer_id(entity),
         moderation_repository,
-        subscription_repository,
         set(settings.ignored_channels),
         source_channels,
         fixer,
