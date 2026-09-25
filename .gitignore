@@ -12,3 +12,4 @@ venv/
 stats.json
 .pytest_cache/
 .ruff_cache/
+plan.md

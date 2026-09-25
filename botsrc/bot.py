@@ -1,0 +1,130 @@
+"""Telegram-бот подписок: ЛС-команды /sub, /unsub и рассылка постов канала."""
+
+import asyncio
+import html
+import logging
+
+from aiogram import Bot, Dispatcher, F
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.filters import Command
+from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup
+
+from botsrc import i18n
+from botsrc.broadcast import Broadcaster
+from botsrc.config import BotSettings
+from botsrc.storage import SubscriptionStore
+
+
+logger = logging.getLogger(__name__)
+
+
+def _menu() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=i18n.BTN_MY_SUBS)],
+            [KeyboardButton(text=i18n.BTN_HELP)],
+        ],
+        resize_keyboard=True,
+    )
+
+
+def _parse_command(text: str, name: str) -> str | None:
+    """Возвращает аргумент команды /name, или None если это не эта команда."""
+    stripped = text.strip()
+    prefix = f"/{name}"
+    if not stripped.lower().startswith(prefix):
+        return None
+    rest = stripped[len(prefix) :]
+    # Допускаем /sub@BotName — отсекаем упоминание бота.
+    if rest.startswith("@"):
+        parts = rest.split(maxsplit=1)
+        rest = parts[1] if len(parts) > 1 else ""
+    if rest and not rest[0].isspace():
+        return None
+    return rest.strip()
+
+
+def _subscriptions_text(store: SubscriptionStore, user_id: int) -> str:
+    keywords = store.list_for_user(user_id)
+    return i18n.SUB_LIST.format(
+        keywords=", ".join(html.escape(word) for word in keywords) if keywords else i18n.SUB_NONE
+    )
+
+
+class SubscriberBot:
+    def __init__(self, settings: BotSettings):
+        self.settings = settings
+        self.store = SubscriptionStore(settings.database_path)
+        self.bot = Bot(
+            token=settings.token,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        )
+        self.dispatcher = Dispatcher()
+        self.broadcaster = Broadcaster(self.bot, self.store, settings.group_c)
+        self._register()
+
+    def _register(self) -> None:
+        dp = self.dispatcher
+        dp.channel_post.register(self.on_channel_post)
+        dp.message.register(self.on_group_post, F.chat.id == self.settings.group_c)
+        dp.message.register(self.cmd_start, Command("start", "help"))
+        dp.message.register(self.on_menu_button, F.text.in_({i18n.BTN_MY_SUBS, i18n.BTN_HELP}))
+        dp.message.register(self.on_sub, Command("sub"))
+        dp.message.register(self.on_unsub, Command("unsub"))
+
+    async def cmd_start(self, message: Message) -> None:
+        await message.answer(i18n.WELCOME, reply_markup=_menu())
+
+    async def on_menu_button(self, message: Message) -> None:
+        if message.text == i18n.BTN_MY_SUBS:
+            await message.answer(self.subscriptions(message.from_user.id), reply_markup=_menu())
+        else:
+            await message.answer(i18n.HELP, reply_markup=_menu())
+
+    async def on_sub(self, message: Message) -> None:
+        value = _parse_command(message.text, "sub")
+        if value is None:
+            return
+        if not value:
+            await message.answer(self.subscriptions(message.from_user.id))
+            return
+        normalized = value.lower()
+        self.store.add(message.from_user.id, normalized)
+        await message.answer(i18n.SUB_ADDED.format(word=html.escape(normalized)))
+
+    async def on_unsub(self, message: Message) -> None:
+        value = _parse_command(message.text, "unsub")
+        if value is None:
+            return
+        if not value:
+            await message.answer(i18n.UNSUB_FORMAT)
+            return
+        if value.lower() == "all":
+            removed = self.store.remove_all(message.from_user.id)
+            await message.answer(i18n.UNSUB_ALL.format(count=removed))
+            return
+        normalized = value.lower()
+        if self.store.remove(message.from_user.id, normalized):
+            await message.answer(i18n.UNSUB_REMOVED.format(word=html.escape(normalized)))
+        else:
+            await message.answer(i18n.UNSUB_MISSING.format(word=html.escape(normalized)))
+
+    def subscriptions(self, user_id: int) -> str:
+        return _subscriptions_text(self.store, user_id)
+
+    async def on_channel_post(self, message: Message) -> None:
+        await self.broadcaster.handle_channel_post(message)
+
+    async def on_group_post(self, message: Message) -> None:
+        # GROUP_C — супергруппа, поэтому посты приходят в message, а не в channel_post.
+        await self.broadcaster.handle_channel_post(message)
+
+    async def run(self) -> None:
+        self.broadcaster.attach_loop(asyncio.get_running_loop())
+        await self.bot.delete_webhook(drop_pending_updates=True)
+        await self.dispatcher.start_polling(self.bot)
+
+
+async def run_bot(settings: BotSettings) -> None:
+    await SubscriberBot(settings).run()

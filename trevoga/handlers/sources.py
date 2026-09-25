@@ -1,7 +1,6 @@
 import logging
 import re
 import tempfile
-import time
 from pathlib import Path
 
 from telethon import events
@@ -20,13 +19,6 @@ from trevoga.services.watermark import apply_watermark
 
 
 logger = logging.getLogger(__name__)
-
-# Окно, у межах якого повторне спрацювання того ж ключового слова не надсилається
-# підписникам (перше повідомлення перемагає).
-SUBSCRIBE_DEDUP_SECONDS = 60
-
-# Пости, довші за цей ліміт символів, підписникам не розсилаються (занадто довгі).
-SUBSCRIBE_MAX_TEXT_LENGTH = 250
 
 _TAG_RE = re.compile(r"<(/?)([a-zA-Z][a-zA-Z0-9]*)(?:\s[^>]*)?>")
 _VOID_TAGS = {"br", "hr", "img", "input", "meta", "link"}
@@ -62,9 +54,6 @@ def _truncate_caption(caption: str, limit: int = CAPTION_LIMIT) -> str:
 
 
 def register(client, context: HandlerContext):
-    # keyword -> monotonic timestamp останнього надісланого сповіщення
-    notify_state: dict[str, float] = {}
-
     @client.on(events.NewMessage())
     async def forward_to_group_c(event):
         if event.chat_id not in context.source_channels:
@@ -72,69 +61,13 @@ def register(client, context: HandlerContext):
         # Album items also emit NewMessage events; the Album handler publishes them together.
         if event.message.grouped_id:
             return
-        await _forward_messages([event.message], event.chat_id, client, context, notify_state)
+        await _forward_messages([event.message], event.chat_id, client, context)
 
     @client.on(events.Album())
     async def forward_album_to_group_c(event):
         if event.chat_id not in context.source_channels:
             return
-        await _forward_messages(event.messages, event.chat_id, client, context, notify_state)
-
-
-async def _notify_subscribers(
-    text, caption, messages, client, context: HandlerContext, notify_state: dict[str, float]
-):
-    if not context.subscriptions:
-        return
-    if len(text) > SUBSCRIBE_MAX_TEXT_LENGTH:
-        # Занадто довгий пост — підписникам не надсилаємо.
-        return
-    lowered = text.lower()
-    notified = set()
-    now = time.monotonic()
-    for keyword in context.subscriptions.all_keywords():
-        if keyword in lowered:
-            last_sent = notify_state.get(keyword)
-            if last_sent is not None and now - last_sent < SUBSCRIBE_DEDUP_SECONDS:
-                # Про це саме ключове слово вже сповіщали в межах вікна — пропускаємо.
-                continue
-            notify_state[keyword] = now
-            for user_id in context.subscriptions.find_by_keyword(keyword):
-                if user_id in notified:
-                    continue
-                notified.add(user_id)
-                try:
-                    media = [item.media for item in messages if item.media]
-                    fallback = matching_photos(text, context.rules) if not media else []
-                    media_caption = _truncate_caption(caption)
-                    if fallback:
-                        with tempfile.TemporaryDirectory(prefix="trevoga-sub-") as directory:
-                            watermarked_media = []
-                            for photo in fallback:
-                                output = Path(directory) / f"watermarked-{photo.name}"
-                                await apply_watermark(photo, output)
-                                watermarked_media.append(output)
-                            await client.send_file(
-                                user_id,
-                                watermarked_media,
-                                caption=media_caption,
-                                parse_mode="html",
-                                link_preview=False,
-                            )
-                    elif media:
-                        await client.send_file(
-                            user_id,
-                            media,
-                            caption=media_caption,
-                            parse_mode="html",
-                            link_preview=False,
-                        )
-                    else:
-                        await client.send_message(
-                            user_id, caption, parse_mode="html", link_preview=False
-                        )
-                except Exception:
-                    logger.exception("Failed to notify subscriber %s", user_id)
+        await _forward_messages(event.messages, event.chat_id, client, context)
 
 
 async def _autocheck_message(client, context: HandlerContext, message_id: int, text: str):
@@ -160,7 +93,7 @@ async def _autocheck_message(client, context: HandlerContext, message_id: int, t
         logger.exception("AI autocheck edit failed for %s", message_id)
 
 
-async def _forward_messages(messages, chat_id, client, context: HandlerContext, notify_state):
+async def _forward_messages(messages, chat_id, client, context: HandlerContext):
     message = messages[0]
     text = clean_text(next((item.raw_text for item in messages if item.raw_text), ""))
     photos = matching_photos(text, context.rules)
@@ -175,7 +108,6 @@ async def _forward_messages(messages, chat_id, client, context: HandlerContext, 
         source=str(chat_id),
         keywords=detect_keywords(text, context.rules),
     )
-    await _notify_subscribers(text, caption, messages, client, context, notify_state)
     media_caption = _truncate_caption(caption)
     try:
         if photos:

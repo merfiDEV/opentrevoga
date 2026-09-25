@@ -54,6 +54,7 @@ class Settings:
     aicheck_enabled: bool = False
     channel_moderation_enabled: bool = False
     ignored_channels: tuple[int, ...] = ()
+    bot_token: str = ""
 
     def validate(self) -> None:
         errors = []
@@ -136,6 +137,7 @@ def load_settings() -> Settings:
             for value in os.getenv("CIGNORE_CHANNELS", "").split(",")
             if value.strip().lstrip("-").isdigit()
         ),
+        bot_token=os.getenv("BOT_TOKEN", "").strip(),
     )
 
 
