@@ -81,7 +81,7 @@ AICHECK_ON = "<blockquote>AI-редактор (official): увімкнено ✅
 AICHECK_OFF = "<blockquote>AI-редактор (official): вимкнено ❌</blockquote>"
 
 # --- .sub / .unsub ---
-SUB_LIST = "<blockquote>Ваші підписки: {keywords}\n\n📌 Можна підписуватися на типи озброєння (бпла, каб, рсзв, fpv, ракета, балістика, арта) або на своє місто (краматорськ, покровськ, бахмут тощо)</blockquote>"
+SUB_LIST = "<blockquote>📋 Ваші підписки: {keywords}\n\n➕ Додати ще: /sub СЛОВО\n🗑 Прибрати: /unsub СЛОВО або /unsub all\n\n📌 Можна підписуватися на типи озброєння (бпла, каб, рсзв, fpv, ракета, балістика, арта) або на своє місто (краматорськ, покровськ, бахмут тощо)</blockquote>"
 SUB_NONE = "немає"
 SUB_ADDED = "<blockquote>Підписку на «{word}» додано</blockquote>"
 UNSUB_FORMAT = "<blockquote>Формат: .unsub СЛОВО | .unsub all</blockquote>"
