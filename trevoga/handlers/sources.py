@@ -25,6 +25,9 @@ logger = logging.getLogger(__name__)
 # підписникам (перше повідомлення перемагає).
 SUBSCRIBE_DEDUP_SECONDS = 60
 
+# Пости, довші за цей ліміт символів, підписникам не розсилаються (занадто довгі).
+SUBSCRIBE_MAX_TEXT_LENGTH = 250
+
 _TAG_RE = re.compile(r"<(/?)([a-zA-Z][a-zA-Z0-9]*)(?:\s[^>]*)?>")
 _VOID_TAGS = {"br", "hr", "img", "input", "meta", "link"}
 
@@ -82,6 +85,9 @@ async def _notify_subscribers(
     text, caption, messages, client, context: HandlerContext, notify_state: dict[str, float]
 ):
     if not context.subscriptions:
+        return
+    if len(text) > SUBSCRIBE_MAX_TEXT_LENGTH:
+        # Занадто довгий пост — підписникам не надсилаємо.
         return
     lowered = text.lower()
     notified = set()
