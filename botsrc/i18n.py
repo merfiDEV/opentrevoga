@@ -23,6 +23,9 @@ __all__ = [
     "BTN_MY_SUBS",
     "BTN_HELP",
     "EMPTY_TEXT",
+    "USERS_TITLE",
+    "USERS_NO_KEYWORDS",
+    "USERS_DENIED",
 ]
 
 WELCOME = (
@@ -61,5 +64,9 @@ HELP = (
 
 BTN_MY_SUBS = "📋 Мої підписки"
 BTN_HELP = "❓ Довідка"
+
+USERS_TITLE = "<blockquote>👥 <b>Статистика підписок</b>\n\nВсього користувачів: {users}\nВсього підписок: {subs}</blockquote>"
+USERS_NO_KEYWORDS = "<blockquote>👥 Користувачів: {users}\n\nПідписок поки немає.</blockquote>"
+USERS_DENIED = "<blockquote>⛔ Команда лише для адміністратора.</blockquote>"
 
 EMPTY_TEXT = "<blockquote>ℹ️ Напишіть ключове слово: <code>/sub бпла</code></blockquote>"

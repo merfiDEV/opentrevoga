@@ -72,6 +72,7 @@ class SubscriberBot:
         dp.message.register(self.on_menu_button, F.text.in_({i18n.BTN_MY_SUBS, i18n.BTN_HELP}))
         dp.message.register(self.on_sub, Command("sub"))
         dp.message.register(self.on_unsub, Command("unsub"))
+        dp.message.register(self.cmd_users, Command("users"))
 
     async def cmd_start(self, message: Message) -> None:
         await message.answer(i18n.WELCOME, reply_markup=_menu())
@@ -109,6 +110,21 @@ class SubscriberBot:
             await message.answer(i18n.UNSUB_REMOVED.format(word=html.escape(normalized)))
         else:
             await message.answer(i18n.UNSUB_MISSING.format(word=html.escape(normalized)))
+
+    async def cmd_users(self, message: Message) -> None:
+        if message.from_user.id not in self.settings.admin_ids:
+            await message.answer(i18n.USERS_DENIED)
+            return
+        users = self.store.user_count()
+        keywords = self.store.keyword_stats()
+        if not keywords:
+            await message.answer(i18n.USERS_NO_KEYWORDS.format(users=users))
+            return
+        lines = "\n".join(f"• {html.escape(word)} — {count}" for word, count in keywords)
+        await message.answer(
+            i18n.USERS_TITLE.format(users=users, subs=self.store.total_subscriptions())
+            + f"<blockquote>{lines}</blockquote>"
+        )
 
     def subscriptions(self, user_id: int) -> str:
         return _subscriptions_text(self.store, user_id)

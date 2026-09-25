@@ -57,3 +57,23 @@ class SubscriptionStore:
                 "SELECT user_id FROM subscriptions WHERE keyword = ?", (keyword,)
             ).fetchall()
         return [row["user_id"] for row in rows]
+
+    def user_count(self) -> int:
+        """Количество уникальных подписчиков."""
+        with self._connect() as connection:
+            row = connection.execute("SELECT COUNT(DISTINCT user_id) FROM subscriptions").fetchone()
+        return row[0] if row else 0
+
+    def keyword_stats(self) -> list[tuple[str, int]]:
+        """Список (ключевое слово, число подписчиков) по убыванию."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT keyword, COUNT(*) AS n FROM subscriptions "
+                "GROUP BY keyword ORDER BY n DESC, keyword"
+            ).fetchall()
+        return [(row["keyword"], row["n"]) for row in rows]
+
+    def total_subscriptions(self) -> int:
+        with self._connect() as connection:
+            row = connection.execute("SELECT COUNT(*) FROM subscriptions").fetchone()
+        return row[0] if row else 0
