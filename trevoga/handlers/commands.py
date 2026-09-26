@@ -7,6 +7,7 @@ from telethon import events, types, utils
 from trevoga import health, i18n
 from trevoga.config import (
     save_aicheck,
+    save_fixme,
     save_ai_model,
     save_cards,
     save_ignored_channels,
@@ -395,3 +396,25 @@ def register(client, context: HandlerContext):
             await event.delete()
         except Exception:  # noqa: BLE001
             pass
+
+    @client.on(events.NewMessage(pattern=r"^\.fixme(?:\s+(on|off|status))?\s*$"))
+    @command(context, admin=True)
+    async def fixme_command(event):
+        value = (event.pattern_match.group(1) or "").lower()
+        if value == "on":
+            context.fixer.fixme_enabled = True
+            save_fixme(True)
+        elif value == "off":
+            context.fixer.fixme_enabled = False
+            save_fixme(False)
+        elif value == "status":
+            state = i18n.FIXME_STATUS_ON if context.fixer.fixme_enabled else i18n.FIXME_STATUS_OFF
+            await event.respond(i18n.FIXME_STATUS.format(state=state), parse_mode="html")
+            return
+        else:
+            context.fixer.fixme_enabled = not context.fixer.fixme_enabled
+            save_fixme(context.fixer.fixme_enabled)
+        await event.respond(
+            i18n.FIXME_ON if context.fixer.fixme_enabled else i18n.FIXME_OFF,
+            parse_mode="html",
+        )

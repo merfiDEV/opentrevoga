@@ -69,6 +69,22 @@ def register(client, context: HandlerContext):
             return
         await _forward_messages(event.messages, event.chat_id, client, context)
 
+    @client.on(events.NewMessage(outgoing=True))
+    async def fixme_message(event):
+        """Режим .fixme: кажное исходящее сообщение в ЛЮБОМ чате правим через ИИ."""
+        if not context.fixer or not context.fixer.fixme_enabled:
+            return
+        text = event.raw_text or ""
+        if not text.strip() or text.lstrip().startswith((".", "/")):
+            return
+        fixed = await context.fixer.fixme_text(text)
+        if not fixed:
+            return
+        try:
+            await event.edit(fixed)
+        except Exception:
+            logger.exception("fixme edit failed")
+
 
 async def _autocheck_message(client, context: HandlerContext, message_id: int, text: str):
     if not context.fixer or not context.fixer.autocheck_enabled:

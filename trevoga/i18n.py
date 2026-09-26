@@ -17,6 +17,7 @@ HELP_ADMIN = """<blockquote>=== КОМАНДИ АДМІНІСТРАТОРА ===
 .stats | .stats 12 | .stats 24
 .ai_reason [MESSAGE_ID] або відповіддю на повідомлення
 .health — стан бота (uptime, AI, БД, FloodWait, остання помилка)
+.fixme on|off — автовиправлення моїх повідомлень (знаки препинання)
 .map — карта повітряних тривог (PNG)
 .відміна | .delete | .видалити
 .help
@@ -120,3 +121,11 @@ AI_REASON_TEXT = "<blockquote>Повідомлення: {message_id}\nСтату
 # --- .map ---
 MAP_CAPTION = "<blockquote>🗺 {summary}\n\n{watermark}</blockquote>"
 MAP_FAILED = "<blockquote>⚠️ Не вдалося отримати карту тривог: {error}</blockquote>"
+
+# --- .fixme ---
+FIXME_ON = "<blockquote>✍️ Режим «виправляти мої повідомлення»: увімкнено ✅\nКожне ваше наступне повідомлення піде на перевірку АІ. Вимкнути: .fixme off</blockquote>"
+FIXME_OFF = "<blockquote>✍️ Режим «виправляти мої повідомлення»: вимкнено ❌</blockquote>"
+FIXME_STATUS_ON = "увімкнено ✅"
+FIXME_STATUS_OFF = "вимкнено ❌"
+FIXME_STATUS = "<blockquote>✍️ Режим виправлення: {state}</blockquote>"
+FIXME_FAILED = "<blockquote>⚠️ Не вдалося виправити (АІ недоступний)</blockquote>"

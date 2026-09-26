@@ -35,6 +35,24 @@ FIX_PROMPTS = {
     "official": FIX_PROMPT + " Використовуй сухий офіційний стиль без емоцій.",
     "neutral": FIX_PROMPT + " Використовуй нейтральний інформаційний стиль.",
 }
+FIXME_PROMPT = (
+    "Ти — коректор української мови. Завжди перекладай текст "
+    "українською, якщо він іншою мовою. Додай лише знаки "
+    "препинання (коми, крапки, знаки питання, оклики, "
+    "двокрапки, тире) та виправ орфографічні помилки. "
+    "Заборонено: змінювати слова, додавати або видаляти "
+    "слова, змінювати сенс. КАТЕГОРИЧНО НЕ змінюй "
+    "спеціальні знаки та символи: +, -, *, /, =, %, #, @, &, |, ^, <, >, "
+    "“”, ‘’, «», …, —, –, ~, `, $, !, ?, :, ;, (, ), [, ], {, }. "
+    "Ці символи залишай точно як в оригіналі, без змін. "
+    "Якщо текст не потребує жодних змін або ти з певних "
+    "причин не можеш його виправити — не вигадуй відповідь, "
+    "а поверни СУВОРО JSON без markdown: "
+    '{"status":"refused","reason":"коротка причина"} '
+    'або {"status":"ok","text":"виправлений текст"}. '
+    "У звичайному режимі відповідай лише виправленим "
+    "текстом без пояснень."
+)
 FIX_MODES = tuple(FIX_PROMPTS)
 FIX_INSTRUCTION_LIMIT = 200
 FIX_INSTRUCTION_BANNED = (
@@ -174,6 +192,14 @@ class ModerationService:
             return await self.fix_client.complete(prompt, text, temperature=0.3) or None
         except Exception:
             logger.exception("AI text correction failed")
+            return None
+
+    async def fixme(self, text: str) -> str | None:
+        """Только пунктуация/орфография через отдельну модель."""
+        try:
+            return await self.fix_client.complete(FIXME_PROMPT, text, temperature=0.1) or None
+        except Exception:
+            logger.exception("AI fixme failed")
             return None
 
     def schedule(self, coroutine) -> None:

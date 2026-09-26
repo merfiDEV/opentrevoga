@@ -52,6 +52,7 @@ class Settings:
     watermark_enabled: bool = True
     cards_enabled: bool = True
     aicheck_enabled: bool = False
+    fixme_enabled: bool = False
     channel_moderation_enabled: bool = False
     ignored_channels: tuple[int, ...] = ()
     bot_token: str = ""
@@ -131,6 +132,7 @@ def load_settings() -> Settings:
         watermark_enabled=_env_flag("WATERMARK_ENABLED", "1"),
         cards_enabled=_env_flag("PHOTO_CARDS_ENABLED", "1"),
         aicheck_enabled=_env_flag("AICHECK_ENABLED"),
+        fixme_enabled=_env_flag("FIXME_ENABLED"),
         channel_moderation_enabled=_env_flag("CHANNEL_MODERATION_ENABLED"),
         ignored_channels=tuple(
             int(value.strip())
@@ -186,6 +188,10 @@ def save_cards(enabled: bool) -> None:
 
 def save_aicheck(enabled: bool) -> None:
     _write_env("AICHECK_ENABLED", "1" if enabled else "0")
+
+
+def save_fixme(enabled: bool) -> None:
+    _write_env("FIXME_ENABLED", "1" if enabled else "0")
 
 
 def save_ignored_channels(channels: tuple[int, ...] | list[int]) -> None:
