@@ -116,9 +116,15 @@ def strip_card_links(caption: str, label: str | None) -> str:
 
 
 def _plain_text(message) -> str:
-    """HTML-текст сообщения канала без тегов."""
+    """HTML-текст сообщения канала без тегов.
+
+    Теги заменяются на их текстовое содержимое, а не вырезаются целиком:
+    иначе текст внутри <a>...</a> (напр. подпись карточки 'FPV') пропадает
+    и ключевое слово не находится при рассылке.
+    """
     raw = message.text or message.caption or ""
-    return html.unescape(_TAG_RE.sub("", raw)).strip()
+    plain = re.sub(r"<[^>]+>", " ", raw)
+    return re.sub(r"\s+", " ", html.unescape(plain)).strip()
 
 
 def _html_text(message) -> str:

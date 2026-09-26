@@ -31,9 +31,20 @@ def _menu() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text=i18n.BTN_MY_SUBS)],
             [KeyboardButton(text=i18n.BTN_SETTINGS)],
+            [KeyboardButton(text=i18n.BTN_HOW)],
+            [KeyboardButton(text=i18n.BTN_SUGGEST)],
             [KeyboardButton(text=i18n.BTN_HELP)],
         ],
         resize_keyboard=True,
+    )
+
+
+def _start_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=i18n.BTN_HOW, callback_data="info:how")],
+            [InlineKeyboardButton(text=i18n.BTN_SUGGEST, url=i18n.DEVELOPER_CONTACT)],
+        ]
     )
 
 
@@ -91,7 +102,15 @@ class SubscriberBot:
         dp.message.register(self.cmd_start, Command("start", "help"))
         dp.message.register(
             self.on_menu_button,
-            F.text.in_({i18n.BTN_MY_SUBS, i18n.BTN_SETTINGS, i18n.BTN_HELP}),
+            F.text.in_(
+                {
+                    i18n.BTN_MY_SUBS,
+                    i18n.BTN_SETTINGS,
+                    i18n.BTN_HELP,
+                    i18n.BTN_HOW,
+                    i18n.BTN_SUGGEST,
+                }
+            ),
         )
         dp.message.register(self.on_sub, Command("sub"))
         dp.message.register(self.on_unsub, Command("unsub"))
@@ -100,15 +119,25 @@ class SubscriberBot:
         dp.callback_query.register(self.on_settings_toggle, F.data.startswith("hint:toggle:"))
 
         dp.callback_query.register(self.on_settings_done, F.data == "hint:done")
+        dp.callback_query.register(self.on_info_how, F.data == "info:how")
 
     async def cmd_start(self, message: Message) -> None:
         await message.answer(i18n.WELCOME, reply_markup=_menu())
+        await message.answer(i18n.START_MENU_HINT, reply_markup=_start_keyboard())
+
+    async def on_info_how(self, callback: CallbackQuery) -> None:
+        await callback.message.answer(i18n.HOW_IT_WORKS)
+        await callback.answer()
 
     async def on_menu_button(self, message: Message) -> None:
         if message.text == i18n.BTN_MY_SUBS:
             await message.answer(self.subscriptions(message.from_user.id), reply_markup=_menu())
         elif message.text == i18n.BTN_SETTINGS:
             await self.on_settings(message)
+        elif message.text == i18n.BTN_HOW:
+            await message.answer(i18n.HOW_IT_WORKS, reply_markup=_menu())
+        elif message.text == i18n.BTN_SUGGEST:
+            await message.answer(i18n.SUGGEST_TEXT, reply_markup=_menu())
         else:
             await message.answer(i18n.HELP, reply_markup=_menu())
 

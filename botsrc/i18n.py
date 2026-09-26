@@ -23,6 +23,12 @@ __all__ = [
     "BTN_MY_SUBS",
     "BTN_HELP",
     "BTN_SETTINGS",
+    "BTN_HOW",
+    "BTN_SUGGEST",
+    "DEVELOPER_CONTACT",
+    "START_MENU_HINT",
+    "HOW_IT_WORKS",
+    "SUGGEST_TEXT",
     "SETTINGS_TITLE",
     "SETTINGS_PHOTO_ON",
     "SETTINGS_PHOTO_OFF",
@@ -85,6 +91,30 @@ HELP = (
 
 BTN_MY_SUBS = "📋 Мої підписки"
 BTN_HELP = "❓ Довідка"
+BTN_HOW = "❓ Як це працює"
+BTN_SUGGEST = "📢 Запропонувати канал"
+
+# Контакт розробника для пропозицій каналів.
+DEVELOPER_CONTACT = "https://t.me/Tyta_Zdesyaa777"
+
+START_MENU_HINT = "👇 <b>Дізнайтесь більше</b>"
+
+HOW_IT_WORKS = (
+    "<blockquote>❓ <b>Як це працює</b>\n\n"
+    "Я збираю інформацію з <b>відкритих телеграм-каналів</b>.\n"
+    "Чим більше каналів підключено — тим більше новин і тим швидше "
+    "ви отримуєте сповіщення.\n\n"
+    "💡 Знаєте канал, який варто додати? Напишіть розробнику — я підключу його."
+    "</blockquote>"
+)
+
+SUGGEST_TEXT = (
+    "<blockquote>📢 <b>Запропонувати канал</b>\n\n"
+    "Знаєте цікавий відкритий телеграм-канал, який варто додати? "
+    "Напишіть розробнику — і він підключить його до збору новин.\n\n"
+    '➡️ <a href="{contact}">Написати розробнику</a>'
+    "</blockquote>"
+).format(contact=DEVELOPER_CONTACT)
 
 USERS_TITLE = "<blockquote>👥 <b>Статистика підписок</b>\n\nВсього користувачів: {users}\nВсього підписок: {subs}</blockquote>"
 USERS_NO_KEYWORDS = "<blockquote>👥 Користувачів: {users}\n\nПідписок поки немає.</blockquote>"
