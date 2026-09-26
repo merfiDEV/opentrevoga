@@ -68,10 +68,35 @@ SETTLE_MS = 2500
 READY_TIMEOUT_MS = 15000
 # TTL кешу готового JPEG (0 = без кешу, завжди свіжий рендер).
 CACHE_TTL_SECONDS = _env_float("MAP_CACHE_TTL", 25.0)
+
 # Персистентний профіль Chrome (cookie Cloudflare переживають рестарт).
-PROFILE_DIR = Path(
+#
+# ВАЖЛИВО: один і той самий user_data_dir НЕ можна відкривати двома
+# процесами одночасно — Chromium тримає SingletonLock, і другий запуск
+# (або рестарт першого) вбиває живий контекст першого з
+# TargetClosedError. Саме це ламало .map: юзербот (main.py) і
+# бот-підписник (python -m botsrc) обидва тримали .chrome-profile.
+# Тому кожен ПРОЦЕС отримує власний підкаталог.
+_BASE_PROFILE_DIR = Path(
     os.getenv("MAP_PROFILE_DIR", "").strip() or (BASE_DIR / ".chrome-profile")
 )
+
+# Скільки разів пробувати підняти/перерендерити браузер перед здачею.
+RENDER_ATTEMPTS = 3
+
+
+def _profile_dir() -> Path:
+    """Каталог профілю Chrome, унікальний для поточного процесу."""
+    explicit = os.getenv("MAP_PROFILE_DIR", "").strip()
+    if explicit:
+        # Явно заданий шлях поважаємо як є (для сумісності та тестів).
+        return _BASE_PROFILE_DIR
+    return _BASE_PROFILE_DIR / f"proc-{os.getpid()}"
+
+
+# Сумісність: старі звернення до PROFILE_DIR продовжують працювати.
+PROFILE_DIR = _BASE_PROFILE_DIR
+
 # Спробувати headless=new (за замовчуванням headful — Cloudflare надійніше пускає).
 HEADLESS = _env_flag("MAP_HEADLESS")
 
@@ -204,11 +229,12 @@ class AlertMapRenderer:
         if self._page is not None and not self._page.is_closed():
             return False
         await self._close_browser()
-        PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+        profile_dir = _profile_dir()
+        profile_dir.mkdir(parents=True, exist_ok=True)
         self._pw = await async_playwright().start()
         # Персистентний контекст: профіль (cookie, localStorage) живе на диску.
         self._context = await self._pw.chromium.launch_persistent_context(
-            user_data_dir=str(PROFILE_DIR),
+            user_data_dir=str(profile_dir),
             headless=HEADLESS,
             args=_LAUNCH_ARGS,
             viewport=VIEWPORT,
@@ -223,7 +249,7 @@ class AlertMapRenderer:
         await self._page.goto(MAP_URL, wait_until="domcontentloaded", timeout=60000)
         await _prepare_page(self._page)
         await _wait_map_ready(self._page)
-        logger.info("Alert map browser warmed up (profile=%s)", PROFILE_DIR)
+        logger.info("Alert map browser warmed up (profile=%s)", profile_dir)
         return True
 
     async def _close_browser(self) -> None:
@@ -240,6 +266,10 @@ class AlertMapRenderer:
         self._page = None
         self._context = None
         self._pw = None
+        # Кеш належить конкретному браузеру: після його смерті старий
+        # JPEG міг би віддаватися з TTL, тому скидаємо і його.
+        self._cache = None
+        self._cache_ts = 0.0
 
     async def screenshot(self) -> bytes:
         """Повернути PNG-скріншот, перевикористовуючи теплий браузер."""
@@ -262,12 +292,17 @@ class AlertMapRenderer:
                 # _ensure_browser — reload тут НЕ потрібен.
                 return await self._page.screenshot()
             except Exception:
-                logger.exception("Warm map render failed; recycling browser")
+                logger.warning("Warm map render failed; recycling browser")
                 await self._close_browser()
                 raise
 
     async def jpeg(self, *, use_cache: bool = True) -> bytes:
-        """Швидкий шлях: кешований JPEG, інакше — теплий рендер + кеш."""
+        """Швидкий шлях: кешований JPEG, інакше — теплий рендер + кеш.
+
+        Робить кілька спроб: якщо теплий браузер помер (TargetClosedError,
+        профіль зайнятий іншим процесом тощо) — піднімаємо його заново,
+        а останнім шансом ідемо холодним шляхом ``screenshot_map``.
+        """
         now = time.monotonic()
         if (
             use_cache
@@ -276,7 +311,31 @@ class AlertMapRenderer:
             and now - self._cache_ts < CACHE_TTL_SECONDS
         ):
             return self._cache
-        png = await self.screenshot()
+
+        last_error: Exception | None = None
+        for attempt in range(RENDER_ATTEMPTS):
+            try:
+                png = await self.screenshot()
+            except Exception as error:  # noqa: BLE001
+                last_error = error
+                # _close_browser уже викликано всередині screenshot().
+                if attempt < RENDER_ATTEMPTS - 1:
+                    await asyncio.sleep(1.0 + attempt)
+                    continue
+                break
+            data = to_photo_jpeg(png)
+            self._cache = data
+            self._cache_ts = time.monotonic()
+            return data
+
+        # Останній шанс — холодний разовий запуск в окремому контексті.
+        logger.warning("Warm renderer failed %d time(s); trying cold path", RENDER_ATTEMPTS)
+        try:
+            png = await screenshot_map()
+        except Exception as error:  # noqa: BLE001
+            if last_error is not None:
+                raise last_error from error
+            raise
         data = to_photo_jpeg(png)
         self._cache = data
         self._cache_ts = time.monotonic()
@@ -314,9 +373,10 @@ async def shutdown_renderer() -> None:
 async def screenshot_map(*, full_page: bool = False) -> bytes:
     """Разовий холодний запуск (сумісність зі старим API та тестами)."""
     async with async_playwright() as pw:
-        PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+        profile_dir = _profile_dir()
+        profile_dir.mkdir(parents=True, exist_ok=True)
         ctx = await pw.chromium.launch_persistent_context(
-            user_data_dir=str(PROFILE_DIR),
+            user_data_dir=str(profile_dir),
             headless=HEADLESS,
             args=_LAUNCH_ARGS,
             viewport=VIEWPORT,

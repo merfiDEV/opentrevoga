@@ -3,6 +3,7 @@
 import asyncio
 import html
 import logging
+import time
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
@@ -26,6 +27,15 @@ from botsrc.storage import SubscriptionStore
 
 
 logger = logging.getLogger(__name__)
+
+# Скільки секунд (приблизно) триває рендер карти — для оцінки «залишилось».
+# Реальний час залежить від Cloudflare-челленджа (холодний старт ~30-35 с,
+# теплий ~2-4 с). Якщо рендер випередив оцінку — одразу надсилаємо карту.
+MAP_RENDER_BUDGET_SECONDS = 30.0
+# Як часто оновлювати повідомлення-прогрес.
+MAP_PROGRESS_TICK_SECONDS = 2.5
+# Ширина прогрес-бара в символах.
+MAP_PROGRESS_BARS = 12
 
 
 def _menu() -> ReplyKeyboardMarkup:
@@ -111,6 +121,8 @@ class SubscriberBot:
         # ВАЖЛИВО: командные хендлеры реєструємо ПЕРЕД on_group_post, щоб
         # /map (та інші команди) у GROUP_C не «з'їдались» розсилкою постів.
         dp.message.register(self.cmd_map, Command("map"))
+        # Кнопка меню «🗺 Карта тривог» шле ТЕКСТ, а не /map — ловимо і її.
+        dp.message.register(self.cmd_map, F.text == i18n.BTN_MAP)
         dp.message.register(self.cmd_start, Command("start", "help"))
         dp.message.register(self.on_sub, Command("sub"))
         dp.message.register(self.on_unsub, Command("unsub"))
@@ -145,18 +157,18 @@ class SubscriberBot:
         await callback.answer()
 
     async def on_menu_button(self, message: Message) -> None:
-            if message.text == i18n.BTN_MY_SUBS:
-                await message.answer(self.subscriptions(message.from_user.id), reply_markup=_menu())
-            elif message.text == i18n.BTN_MAP:
-                await self.cmd_map(message)
-            elif message.text == i18n.BTN_SETTINGS:
-                await self.on_settings(message)
-            elif message.text == i18n.BTN_HOW:
-                await message.answer(i18n.HOW_IT_WORKS, reply_markup=_menu())
-            elif message.text == i18n.BTN_SUGGEST:
-                await message.answer(i18n.SUGGEST_TEXT, reply_markup=_menu())
-            else:
-                await message.answer(i18n.HELP, reply_markup=_menu())
+        if message.text == i18n.BTN_MY_SUBS:
+            await message.answer(self.subscriptions(message.from_user.id), reply_markup=_menu())
+        elif message.text == i18n.BTN_MAP:
+            await self.cmd_map(message)
+        elif message.text == i18n.BTN_SETTINGS:
+            await self.on_settings(message)
+        elif message.text == i18n.BTN_HOW:
+            await message.answer(i18n.HOW_IT_WORKS, reply_markup=_menu())
+        elif message.text == i18n.BTN_SUGGEST:
+            await message.answer(i18n.SUGGEST_TEXT, reply_markup=_menu())
+        else:
+            await message.answer(i18n.HELP, reply_markup=_menu())
 
     async def on_settings(self, message: Message) -> None:
         photo_on, wiki_on = self.store.hint_settings(message.from_user.id)
@@ -228,23 +240,69 @@ class SubscriberBot:
         return _subscriptions_text(self.store, user_id)
 
     async def cmd_map(self, message: Message) -> None:
-        """Надіслати карту повітряних тривог. Працює в будь-якому чаті."""
+        """Надіслати карту повітряних тривог. Працює в будь-якому чаті.
+
+        Поки триває рендер (може бути до ~35 с через Cloudflare-челлендж),
+        повідомлення з прогресом оновлюється раз на MAP_PROGRESS_TICK секунд:
+        показує прогрес-бар і скільки секунд приблизно лишилось.
+        """
         notice = await message.answer(i18n.MAP_RENDERING)
+        render_task = asyncio.create_task(render_map_photo())
         try:
-            photo = await render_map_photo()
+            await self._animate_map_progress(notice, render_task)
+            photo = await render_task
         except Exception:
+            render_task.cancel()
             logger.exception("Failed to render alert map")
-            await message.answer(i18n.MAP_FAILED)
-            return
-        finally:
             try:
-                await notice.delete()
+                await notice.edit_text(i18n.MAP_FAILED)
             except Exception:
-                pass
+                await message.answer(i18n.MAP_FAILED)
+            return
+        try:
+            await notice.delete()
+        except Exception:
+            pass
         await message.answer_photo(
             BufferedInputFile(photo, filename="map.jpg"),
             caption=i18n.MAP_CAPTION,
         )
+
+    async def _animate_map_progress(self, notice: Message, render_task) -> None:
+        """Оновлювати повідомлення-прогрес, доки render_task не завершиться."""
+        started = time.monotonic()
+        budget = MAP_RENDER_BUDGET_SECONDS
+        tick = MAP_PROGRESS_TICK_SECONDS
+        while not render_task.done():
+            elapsed = time.monotonic() - started
+            if await self._sleep_or_done(render_task, tick):
+                return
+            await self._edit_progress(notice, elapsed, budget)
+
+    @staticmethod
+    async def _sleep_or_done(render_task, seconds: float) -> bool:
+        """Спати `seconds`, але прокинутись одразу, якщо рендер завершився."""
+        try:
+            await asyncio.wait_for(asyncio.shield(render_task), timeout=seconds)
+            return True
+        except TimeoutError:
+            return False
+
+    async def _edit_progress(
+        self, notice: Message, elapsed: float, budget: float
+    ) -> None:
+        left = max(0, int(round(budget - elapsed)))
+        filled = min(MAP_PROGRESS_BARS, max(0, int(elapsed / budget * MAP_PROGRESS_BARS)))
+        bar = "▰" * filled + "▱" * (MAP_PROGRESS_BARS - filled)
+        if left <= 0:
+            text = i18n.MAP_PROGRESS_FINAL.format(bar=bar)
+        else:
+            text = i18n.MAP_PROGRESS.format(bar=bar, left=left)
+        try:
+            await notice.edit_text(text)
+        except Exception:
+            # «message is not modified» та подібне — не привід падати.
+            pass
 
     async def on_channel_post(self, message: Message) -> None:
         await self.broadcaster.handle_channel_post(message)
@@ -257,12 +315,12 @@ class SubscriberBot:
         await self.broadcaster.handle_channel_post(message)
 
     async def run(self) -> None:
-            self.broadcaster.attach_loop(asyncio.get_running_loop())
-            await self.bot.delete_webhook(drop_pending_updates=True)
-            try:
-                await self.dispatcher.start_polling(self.bot)
-            finally:
-                await shutdown_map_renderer()
+        self.broadcaster.attach_loop(asyncio.get_running_loop())
+        await self.bot.delete_webhook(drop_pending_updates=True)
+        try:
+            await self.dispatcher.start_polling(self.bot)
+        finally:
+            await shutdown_map_renderer()
 
 
 async def run_bot(settings: BotSettings) -> None:

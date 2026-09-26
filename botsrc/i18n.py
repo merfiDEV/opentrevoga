@@ -126,6 +126,20 @@ EMPTY_TEXT = "<blockquote>ℹ️ Напишіть ключове слово: <co
 
 # --- /map ---
 MAP_RENDERING = "<blockquote>🗺 Роблю скріншот карти тривог, зачекайте…</blockquote>"
+
+# Живий прогрес рендера карти.
+# {bar} — заповнений/порожній прогрес-бар, {left} — скільки секунд лишилось.
+MAP_PROGRESS = (
+    "<blockquote>🗺 <b>Готую карту тривог…</b>\n\n"
+    "{bar}\n"
+    "⏳ Залишилось ~{left} с</blockquote>"
+)
+# Коли рендер триває довше за оцінку — не показуємо «0 с», а тримаємо фінальну фазу.
+MAP_PROGRESS_FINAL = (
+    "<blockquote>🗺 <b>Готую карту тривог…</b>\n\n"
+    "{bar}\n"
+    "📤 Майже готово, надсилаю…</blockquote>"
+)
 MAP_CAPTION = (
     "<blockquote>🗺 <b>Карта повітряних тривог України</b>\n\n"
     "Джерело: map.ukrainealarm.com</blockquote>"
