@@ -121,3 +121,13 @@ USERS_NO_KEYWORDS = "<blockquote>👥 Користувачів: {users}\n\nПі�
 USERS_DENIED = "<blockquote>⛔ Команда лише для адміністратора.</blockquote>"
 
 EMPTY_TEXT = "<blockquote>ℹ️ Напишіть ключове слово: <code>/sub бпла</code></blockquote>"
+
+# --- /map ---
+MAP_RENDERING = "<blockquote>🗺 Роблю скріншот карти тривог, зачекайте…</blockquote>"
+MAP_CAPTION = (
+    "<blockquote>🗺 <b>Карта повітряних тривог України</b>\n\n"
+    "Джерело: map.ukrainealarm.com</blockquote>"
+)
+MAP_FAILED = (
+    "<blockquote>⚠️ Не вдалося отримати карту тривог. Спробуйте пізніше.</blockquote>"
+)

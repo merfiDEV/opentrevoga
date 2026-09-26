@@ -9,6 +9,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.types import (
+    BufferedInputFile,
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -20,6 +21,7 @@ from aiogram.types import (
 from botsrc import i18n
 from botsrc.broadcast import Broadcaster
 from botsrc.config import BotSettings
+from botsrc.map_service import render_map_photo
 from botsrc.storage import SubscriptionStore
 
 
@@ -76,6 +78,12 @@ def _parse_command(text: str, name: str) -> str | None:
     return rest.strip()
 
 
+def _is_command(message: Message) -> bool:
+    """True, если сообщение — команда (/что-угодно), чтобы не съедать её рассылкой."""
+    text = message.text or message.caption or ""
+    return text.lstrip().startswith("/")
+
+
 def _subscriptions_text(store: SubscriptionStore, user_id: int) -> str:
     keywords = store.list_for_user(user_id)
     return i18n.SUB_LIST.format(
@@ -98,8 +106,19 @@ class SubscriberBot:
     def _register(self) -> None:
         dp = self.dispatcher
         dp.channel_post.register(self.on_channel_post)
-        dp.message.register(self.on_group_post, F.chat.id == self.settings.group_c)
+
+        # ВАЖЛИВО: командные хендлеры реєструємо ПЕРЕД on_group_post, щоб
+        # /map (та інші команди) у GROUP_C не «з'їдались» розсилкою постів.
+        dp.message.register(self.cmd_map, Command("map"))
         dp.message.register(self.cmd_start, Command("start", "help"))
+        dp.message.register(self.on_sub, Command("sub"))
+        dp.message.register(self.on_unsub, Command("unsub"))
+        dp.message.register(self.on_settings, Command("settings"))
+        dp.message.register(self.cmd_users, Command("users"))
+
+        # Решта повідомлень GROUP_C — це пости для розсилки.
+        dp.message.register(self.on_group_post, F.chat.id == self.settings.group_c)
+
         dp.message.register(
             self.on_menu_button,
             F.text.in_(
@@ -112,12 +131,7 @@ class SubscriberBot:
                 }
             ),
         )
-        dp.message.register(self.on_sub, Command("sub"))
-        dp.message.register(self.on_unsub, Command("unsub"))
-        dp.message.register(self.on_settings, Command("settings"))
-        dp.message.register(self.cmd_users, Command("users"))
         dp.callback_query.register(self.on_settings_toggle, F.data.startswith("hint:toggle:"))
-
         dp.callback_query.register(self.on_settings_done, F.data == "hint:done")
         dp.callback_query.register(self.on_info_how, F.data == "info:how")
 
@@ -210,11 +224,33 @@ class SubscriberBot:
     def subscriptions(self, user_id: int) -> str:
         return _subscriptions_text(self.store, user_id)
 
+    async def cmd_map(self, message: Message) -> None:
+        """Надіслати карту повітряних тривог. Працює в будь-якому чаті."""
+        notice = await message.answer(i18n.MAP_RENDERING)
+        try:
+            photo = await render_map_photo()
+        except Exception:
+            logger.exception("Failed to render alert map")
+            await message.answer(i18n.MAP_FAILED)
+            return
+        finally:
+            try:
+                await notice.delete()
+            except Exception:
+                pass
+        await message.answer_photo(
+            BufferedInputFile(photo, filename="map.jpg"),
+            caption=i18n.MAP_CAPTION,
+        )
+
     async def on_channel_post(self, message: Message) -> None:
         await self.broadcaster.handle_channel_post(message)
 
     async def on_group_post(self, message: Message) -> None:
         # GROUP_C — супергруппа, поэтому посты приходят в message, а не в channel_post.
+        # Команды сюда не попадают: они перехвачены выше по регистрации.
+        if _is_command(message):
+            return
         await self.broadcaster.handle_channel_post(message)
 
     async def run(self) -> None:
