@@ -230,7 +230,6 @@ class Broadcaster:
                     message.photo[-1].file_id,
                     caption=caption,
                     parse_mode="HTML",
-                    link_preview_options=no_preview,
                 )
             elif message.video:
                 await self.bot.send_video(
@@ -238,7 +237,6 @@ class Broadcaster:
                     message.video.file_id,
                     caption=caption,
                     parse_mode="HTML",
-                    link_preview_options=no_preview,
                 )
             elif message.document:
                 await self.bot.send_document(
@@ -246,7 +244,6 @@ class Broadcaster:
                     message.document.file_id,
                     caption=caption,
                     parse_mode="HTML",
-                    link_preview_options=no_preview,
                 )
             else:
                 await self.bot.send_message(
