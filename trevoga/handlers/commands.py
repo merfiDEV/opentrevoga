@@ -385,13 +385,24 @@ def register(client, context: HandlerContext):
         # ФОТО: передаємо file=... с именем .jpg, БЕЗ attributes и с force_document=False.
         # Именно attributes=[DocumentAttributeFilename] заставлял Telethon слать документ.
         photo.name = "map.jpg"
-        await client.send_file(
-            event.chat_id,
-            photo,
-            caption=caption,
-            parse_mode="html",
-            force_document=False,
-        )
+        try:
+            await client.send_file(
+                event.chat_id,
+                photo,
+                caption=caption,
+                parse_mode="html",
+                force_document=False,
+            )
+        except Exception as error:  # noqa: BLE001
+            logger.exception("Failed to send alert map")
+            try:
+                await event.respond(
+                    i18n.MAP_FAILED.format(error=html.escape(str(error))),
+                    parse_mode="html",
+                )
+            except Exception:  # noqa: BLE001
+                pass
+            return
         try:
             await event.delete()
         except Exception:  # noqa: BLE001

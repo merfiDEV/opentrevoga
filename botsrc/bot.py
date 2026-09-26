@@ -21,7 +21,7 @@ from aiogram.types import (
 from botsrc import i18n
 from botsrc.broadcast import Broadcaster
 from botsrc.config import BotSettings
-from botsrc.map_service import render_map_photo
+from botsrc.map_service import render_map_photo, shutdown_map_renderer
 from botsrc.storage import SubscriptionStore
 
 
@@ -32,6 +32,7 @@ def _menu() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=i18n.BTN_MY_SUBS)],
+            [KeyboardButton(text=i18n.BTN_MAP)],
             [KeyboardButton(text=i18n.BTN_SETTINGS)],
             [KeyboardButton(text=i18n.BTN_HOW)],
             [KeyboardButton(text=i18n.BTN_SUGGEST)],
@@ -144,16 +145,18 @@ class SubscriberBot:
         await callback.answer()
 
     async def on_menu_button(self, message: Message) -> None:
-        if message.text == i18n.BTN_MY_SUBS:
-            await message.answer(self.subscriptions(message.from_user.id), reply_markup=_menu())
-        elif message.text == i18n.BTN_SETTINGS:
-            await self.on_settings(message)
-        elif message.text == i18n.BTN_HOW:
-            await message.answer(i18n.HOW_IT_WORKS, reply_markup=_menu())
-        elif message.text == i18n.BTN_SUGGEST:
-            await message.answer(i18n.SUGGEST_TEXT, reply_markup=_menu())
-        else:
-            await message.answer(i18n.HELP, reply_markup=_menu())
+            if message.text == i18n.BTN_MY_SUBS:
+                await message.answer(self.subscriptions(message.from_user.id), reply_markup=_menu())
+            elif message.text == i18n.BTN_MAP:
+                await self.cmd_map(message)
+            elif message.text == i18n.BTN_SETTINGS:
+                await self.on_settings(message)
+            elif message.text == i18n.BTN_HOW:
+                await message.answer(i18n.HOW_IT_WORKS, reply_markup=_menu())
+            elif message.text == i18n.BTN_SUGGEST:
+                await message.answer(i18n.SUGGEST_TEXT, reply_markup=_menu())
+            else:
+                await message.answer(i18n.HELP, reply_markup=_menu())
 
     async def on_settings(self, message: Message) -> None:
         photo_on, wiki_on = self.store.hint_settings(message.from_user.id)
@@ -254,9 +257,12 @@ class SubscriberBot:
         await self.broadcaster.handle_channel_post(message)
 
     async def run(self) -> None:
-        self.broadcaster.attach_loop(asyncio.get_running_loop())
-        await self.bot.delete_webhook(drop_pending_updates=True)
-        await self.dispatcher.start_polling(self.bot)
+            self.broadcaster.attach_loop(asyncio.get_running_loop())
+            await self.bot.delete_webhook(drop_pending_updates=True)
+            try:
+                await self.dispatcher.start_polling(self.bot)
+            finally:
+                await shutdown_map_renderer()
 
 
 async def run_bot(settings: BotSettings) -> None:

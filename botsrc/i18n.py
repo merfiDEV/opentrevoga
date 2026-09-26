@@ -25,6 +25,7 @@ __all__ = [
     "BTN_SETTINGS",
     "BTN_HOW",
     "BTN_SUGGEST",
+    "BTN_MAP",
     "DEVELOPER_CONTACT",
     "START_MENU_HINT",
     "HOW_IT_WORKS",
@@ -93,6 +94,7 @@ BTN_MY_SUBS = "📋 Мої підписки"
 BTN_HELP = "❓ Довідка"
 BTN_HOW = "❓ Як це працює"
 BTN_SUGGEST = "📢 Запропонувати канал"
+BTN_MAP = "🗺 Карта тривог"
 
 # Контакт розробника для пропозицій каналів.
 DEVELOPER_CONTACT = "https://t.me/Tyta_Zdesyaa777"

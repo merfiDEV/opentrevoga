@@ -13,3 +13,7 @@ stats.json
 .pytest_cache/
 .ruff_cache/
 plan.md
+
+# Persistent Chrome profile for .map renderer
+.chrome-profile/
+bench_out.txt

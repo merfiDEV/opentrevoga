@@ -15,6 +15,7 @@ from trevoga.handlers.reactions import register as register_reactions
 from trevoga.handlers.sources import register as register_sources
 from trevoga.integrations.ai_client import AIClient
 from trevoga.integrations.telegram import create_client
+from trevoga.services.alert_map import shutdown_renderer as _shutdown_map_renderer
 from trevoga.services.fix_service import FixService
 from trevoga.services.moderation import ModerationService
 from trevoga.services.publishing import PublishingService
@@ -146,6 +147,7 @@ async def run():
     finally:
         cleanup_task.cancel()
         await _drain_tasks(cleanup_task)
+        await _shutdown_map_renderer()
         await moderation.drain()
         await moderation.aclose()
         await client.disconnect()
