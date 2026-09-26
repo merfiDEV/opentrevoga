@@ -17,6 +17,7 @@ HELP_ADMIN = """<blockquote>=== КОМАНДИ АДМІНІСТРАТОРА ===
 .stats | .stats 12 | .stats 24
 .ai_reason [MESSAGE_ID] або відповіддю на повідомлення
 .health — стан бота (uptime, AI, БД, FloodWait, остання помилка)
+.map — карта повітряних тривог (PNG)
 .відміна | .delete | .видалити
 .help
 
@@ -115,3 +116,7 @@ ADDCHAN_NOT_FOUND = "<blockquote>⚠️ Не вдалося знайти кан�
 # --- .ai_reason ---
 AI_REASON_MISSING = "<blockquote>Результат AI-перевірки не знайдено</blockquote>"
 AI_REASON_TEXT = "<blockquote>Повідомлення: {message_id}\nСтатус: {status}\nПричина: {reason}\nПояснення: {reason_text}\nВпевненість: {confidence}</blockquote>"
+
+# --- .map ---
+MAP_CAPTION = "<blockquote>🗺 {summary}\n\n{watermark}</blockquote>"
+MAP_FAILED = "<blockquote>⚠️ Не вдалося отримати карту тривог: {error}</blockquote>"

@@ -1,7 +1,8 @@
 import html
+import io
 from datetime import datetime
 
-from telethon import events, utils
+from telethon import events, types, utils
 
 from trevoga import health, i18n
 from trevoga.config import (
@@ -14,6 +15,7 @@ from trevoga.config import (
 )
 from trevoga.handlers.context import HandlerContext
 from trevoga.handlers.decorators import command
+from trevoga.services import alert_map
 from trevoga.services.fix_service import (
     RESULT_ERROR,
     RESULT_TOO_LONG,
@@ -364,3 +366,32 @@ def register(client, context: HandlerContext):
                 confidence=result.confidence if result.confidence is not None else "немає",
             )
         await event.respond(text, parse_mode="html")
+
+    @client.on(events.NewMessage(pattern=r"^\.map\s*$"))
+    async def map_command(event):
+        """Карта тривог. Працює в будь-якому чаті (ЛС, група, супергрупа)."""
+        try:
+            photo_bytes, summary = await alert_map.build_map_png(
+                context.settings.assets_dir
+            )
+            photo = io.BytesIO(photo_bytes)
+        except Exception as error:  # noqa: BLE001
+            await event.respond(
+                i18n.MAP_FAILED.format(error=html.escape(str(error))), parse_mode="html"
+            )
+            return
+        caption = i18n.MAP_CAPTION.format(summary=html.escape(summary), watermark=watermark())
+        # ФОТО: передаємо file=... с именем .jpg, БЕЗ attributes и с force_document=False.
+        # Именно attributes=[DocumentAttributeFilename] заставлял Telethon слать документ.
+        photo.name = "map.jpg"
+        await client.send_file(
+            event.chat_id,
+            photo,
+            caption=caption,
+            parse_mode="html",
+            force_document=False,
+        )
+        try:
+            await event.delete()
+        except Exception:  # noqa: BLE001
+            pass
