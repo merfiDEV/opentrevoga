@@ -1,8 +1,24 @@
 import sqlite3
 from pathlib import Path
+from typing import Callable
 
 
-MIGRATIONS = [
+def _migration_4_stem_columns(connection: sqlite3.Connection) -> None:
+    """Идемпотентно добавляет колонки для нечёткого inline-поиска.
+
+    Колонки могли уже появиться из ленивой миграции бота-подписчика
+    (botsrc.storage), поэтому проверяем их наличие.
+    """
+    columns = {row["name"] for row in connection.execute("PRAGMA table_info(news_index)")}
+    if "text_stem" not in columns:
+        connection.execute("ALTER TABLE news_index ADD COLUMN text_stem TEXT NOT NULL DEFAULT ''")
+    if "keywords_stem" not in columns:
+        connection.execute(
+            "ALTER TABLE news_index ADD COLUMN keywords_stem TEXT NOT NULL DEFAULT ''"
+        )
+
+
+MIGRATIONS: list[str | Callable[[sqlite3.Connection], None]] = [
     # 1: initial schema
     """
     CREATE TABLE IF NOT EXISTS forwarded_messages (
@@ -61,6 +77,10 @@ MIGRATIONS = [
         SET text_lower = lower(text),
             keywords_lower = lower(keywords);
     """,
+    # 4: stemmed mirror of news text for fuzzy inline search (@bot word).
+    # Позволяет находить словоформы и варианты написания ('одеса'/'одесса').
+    # Заполняется приложением (botsrc.storage.stem_text) при индексации.
+    _migration_4_stem_columns,
 ]
 
 
@@ -77,5 +97,8 @@ class Database:
         with self.connect() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
             for index, migration in enumerate(MIGRATIONS[version:], start=version + 1):
-                connection.executescript(migration)
+                if callable(migration):
+                    migration(connection)
+                else:
+                    connection.executescript(migration)
                 connection.execute(f"PRAGMA user_version = {index}")

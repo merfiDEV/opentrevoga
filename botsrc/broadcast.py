@@ -178,11 +178,9 @@ class Broadcaster:
     def _remember_news(self, messages: list, matched: list[str]) -> None:
         """Зберегти пост в індексі новин для inline-режиму (@бот <слово>).
 
-        Пишемо лише пости з карткою (photo_rules) — саме такі новини мають
-        сенс показувати в інлайні. Картка визначається так само, як у _mute_flags.
+        Пишемо будь-який пост із карткою (photo_rules) — навіть якщо на його
+        слова ніхто не підписаний: inline-пошук має знаходити всі такі новини.
         """
-        if not matched:
-            return
         if not card_label(messages[0]):
             return
         primary = messages[0]
@@ -204,15 +202,15 @@ class Broadcaster:
         text = _plain_text(messages[0])
         if not text:
             return
-        if len(text) > SUBSCRIBE_MAX_TEXT_LENGTH:
-            return
         lowered = fold_homoglyphs(text)
         matched = [
             keyword for keyword in self.store.all_keywords() if fold_homoglyphs(keyword) in lowered
         ]
-        # Індексуємо для inline-режиму ДО перевірки dedup/підписників:
-        # новина має потрапити в індекс навіть якщо підписників на слово немає.
+        # Індексуємо для inline-режиму ДО перевірки довжини/dedup/підписників:
+        # новина має потрапити в індекс незалежно від того, чи є підписники.
         self._remember_news(messages, matched)
+        if len(text) > SUBSCRIBE_MAX_TEXT_LENGTH:
+            return
         if not matched:
             return
 

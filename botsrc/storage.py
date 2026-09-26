@@ -1,9 +1,75 @@
 """Доступ к таблице подписок в общей trevoga.db."""
 
 import json
+import re
 import sqlite3
 import time
 from pathlib import Path
+
+# Частые русские/украинские окончания — снимаем их при стемминге.
+# Порядок важен: сначала длинные, чтобы убрать максимально полное окончание.
+_ENDINGS = (
+    "иями",
+    "ями",
+    "ами",
+    "ией",
+    "иях",
+    "ьи",
+    "ии",
+    "ов",
+    "ев",
+    "ей",
+    "ой",
+    "ые",
+    "ая",
+    "ое",
+    "ий",
+    "ый",
+    "ам",
+    "ям",
+    "ах",
+    "ях",
+    "ию",
+    "ью",
+    "ия",
+    "ья",
+    "ия",
+    "а",
+    "я",
+    "е",
+    "у",
+    "ю",
+    "и",
+    "ы",
+    "о",
+    "й",
+    "ь",
+)
+
+# Стемминг: приводим слово к грубой основе, чтобы совпадали словоформы
+# и варианты написания ('одеса'/'одесса' -> 'одес').
+_STEM_MIN = 4
+
+
+def stem_word(word: str) -> str:
+    """Грубая нормализация слова: lower + усечение окончания + усечение до основы."""
+    word = word.strip().lower()
+    if len(word) <= _STEM_MIN:
+        return word
+    for ending in _ENDINGS:
+        if len(word) - len(ending) >= _STEM_MIN and word.endswith(ending):
+            word = word[: -len(ending)]
+            break
+    # Если слово всё ещё длиннее основы — режем до _STEM_MIN символов,
+    # чтобы 'одесса' и 'одеса' сходились к общему корню.
+    if len(word) > _STEM_MIN:
+        word = word[:_STEM_MIN]
+    return word
+
+
+def stem_text(text: str) -> str:
+    """Стемминг всех слов в тексте (для хранения и поиска)."""
+    return " ".join(stem_word(w) for w in re.findall(r"\w+", text.lower()))
 
 
 class SubscriptionStore:
@@ -24,6 +90,19 @@ class SubscriptionStore:
             "photo_on INTEGER NOT NULL DEFAULT 1, "
             "wiki_on INTEGER NOT NULL DEFAULT 1)"
         )
+        # Ленивая миграция: колонки для нечёткого поиска в inline-режиме.
+        # Основная миграция живёт в trevoga/storage/database.py, но бот-подписчик
+        # может стартовать раньше юзербота, поэтому подстраховываемся.
+        columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(news_index)").fetchall()
+        }
+        if columns and "text_stem" not in columns:
+            connection.execute(
+                "ALTER TABLE news_index ADD COLUMN text_stem TEXT NOT NULL DEFAULT ''"
+            )
+            connection.execute(
+                "ALTER TABLE news_index ADD COLUMN keywords_stem TEXT NOT NULL DEFAULT ''"
+            )
         return connection
 
     def add(self, user_id: int, keyword: str) -> None:
@@ -131,8 +210,9 @@ class SubscriptionStore:
             connection.execute(
                 "INSERT INTO news_index "
                 "(group_c_message_id, text, html, keywords, photo_file_id, "
-                " video_file_id, created_at, text_lower, keywords_lower) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " video_file_id, created_at, text_lower, keywords_lower, "
+                " text_stem, keywords_stem) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     group_c_message_id,
                     text,
@@ -143,16 +223,18 @@ class SubscriptionStore:
                     time.time(),
                     text.lower(),
                     keywords_json.lower(),
+                    stem_text(text),
+                    stem_text(" ".join(keywords)),
                 ),
             )
 
     def search_news(self, query: str, *, limit: int = 10) -> list[sqlite3.Row]:
-        """Знайти останні новини за ключовим словом (регістронезалежно).
+        """Знайти останні новини за ключовим словом (нечітко, за основою слова).
 
-        Порівнюємо з text_lower/keywords_lower (заповнені через Python
-        .lower()), бо SQLite lower() не працює з кирилицею.
+        Запит і документ приводяться до основи через stem_text(), тому
+        'одеса' знаходить 'одесса', словоформи тощо.
         """
-        needle = query.strip().lower()
+        needle = stem_text(query)
         if not needle:
             return []
         pattern = f"%{needle}%"
@@ -161,7 +243,7 @@ class SubscriptionStore:
                 "SELECT id, text, html, keywords, photo_file_id, video_file_id, "
                 "       created_at "
                 "FROM news_index "
-                "WHERE text_lower LIKE ? OR keywords_lower LIKE ? "
+                "WHERE text_stem LIKE ? OR keywords_stem LIKE ? "
                 "ORDER BY created_at DESC "
                 "LIMIT ?",
                 (pattern, pattern, limit),

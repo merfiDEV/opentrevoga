@@ -16,7 +16,6 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     InlineQuery,
     InlineQueryResultArticle,
-    InlineQueryResultsButton,
     InputTextMessageContent,
     KeyboardButton,
     Message,
@@ -294,9 +293,7 @@ class SubscriberBot:
         except TimeoutError:
             return False
 
-    async def _edit_progress(
-        self, notice: Message, elapsed: float, budget: float
-    ) -> None:
+    async def _edit_progress(self, notice: Message, elapsed: float, budget: float) -> None:
         left = max(0, int(round(budget - elapsed)))
         filled = min(MAP_PROGRESS_BARS, max(0, int(elapsed / budget * MAP_PROGRESS_BARS)))
         bar = "▰" * filled + "▱" * (MAP_PROGRESS_BARS - filled)
@@ -317,24 +314,17 @@ class SubscriberBot:
         новину, що містить слово (в тексті або в ключових словах).
         """
         raw = (query.query or "").strip()
+        # Порожній запит або нічого не знайдено: повертаємо порожній список.
+        # InlineQueryResultsButton НЕ використовуємо — Telegram вимагає для
+        # неї рівно одне необов'язкове поле (start_parameter або web_app),
+        # а підказка тут не потрібна.
         if not raw:
-            hint = i18n.INLINE_EMPTY
-            for tag in ("<blockquote>", "</blockquote>", "<code>", "</code>"):
-                hint = hint.replace(tag, "")
-            await query.answer(
-                results=[],
-                button=InlineQueryResultsButton(text=hint),
-                cache_time=5,
-            )
+            await query.answer(results=[], cache_time=5)
             return
 
         rows = self.store.search_news(raw, limit=1)
         if not rows:
-            await query.answer(
-                results=[],
-                button=InlineQueryResultsButton(text=i18n.INLINE_TITLE),
-                cache_time=5,
-            )
+            await query.answer(results=[], cache_time=5)
             return
 
         row = rows[0]
