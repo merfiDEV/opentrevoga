@@ -34,7 +34,7 @@ import io
 import logging
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 
 from playwright.async_api import async_playwright
@@ -161,7 +161,7 @@ def to_photo_jpeg(png: bytes, *, quality: int = 88) -> bytes:
 def _caption(regions: int | None = None) -> str:
     # Київський час (EET/EEST) незалежно від TZ машини.
     kyiv = timezone(timedelta(hours=3))
-    ts = datetime.now(timezone.utc).astimezone(kyiv).strftime("%d.%m.%Y %H:%M")
+    ts = datetime.now(UTC).astimezone(kyiv).strftime("%d.%m.%Y %H:%M")
     return f"Оновлено: {ts} (Київ)"
 
 

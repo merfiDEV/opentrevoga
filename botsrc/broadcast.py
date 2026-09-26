@@ -175,6 +175,31 @@ class Broadcaster:
             messages.sort(key=lambda item: item.message_id)
             await self._dispatch(messages)
 
+    def _remember_news(self, messages: list, matched: list[str]) -> None:
+        """Зберегти пост в індексі новин для inline-режиму (@бот <слово>).
+
+        Пишемо лише пости з карткою (photo_rules) — саме такі новини мають
+        сенс показувати в інлайні. Картка визначається так само, як у _mute_flags.
+        """
+        if not matched:
+            return
+        if not card_label(messages[0]):
+            return
+        primary = messages[0]
+        photo_id = primary.photo[-1].file_id if primary.photo else None
+        video_id = primary.video.file_id if primary.video else None
+        try:
+            self.store.index_news(
+                group_c_message_id=getattr(primary, "message_id", None),
+                text=_plain_text(primary),
+                html=_html_text(primary),
+                keywords=matched,
+                photo_file_id=photo_id,
+                video_file_id=video_id,
+            )
+        except Exception:
+            logger.exception("Failed to index news for inline mode")
+
     async def _dispatch(self, messages: list) -> None:
         text = _plain_text(messages[0])
         if not text:
@@ -185,6 +210,9 @@ class Broadcaster:
         matched = [
             keyword for keyword in self.store.all_keywords() if fold_homoglyphs(keyword) in lowered
         ]
+        # Індексуємо для inline-режиму ДО перевірки dedup/підписників:
+        # новина має потрапити в індекс навіть якщо підписників на слово немає.
+        self._remember_news(messages, matched)
         if not matched:
             return
 

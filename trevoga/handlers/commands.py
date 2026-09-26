@@ -1,8 +1,9 @@
 import html
 import io
+import logging
 from datetime import datetime
 
-from telethon import events, types, utils
+from telethon import events, utils
 
 from trevoga import health, i18n
 from trevoga.config import (
@@ -31,6 +32,9 @@ from trevoga.services.text_cleaner import (
     set_watermark,
     watermark,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 async def _undo_fix(client, context, event):

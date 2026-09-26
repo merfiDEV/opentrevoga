@@ -114,9 +114,9 @@ SUGGEST_TEXT = (
     "<blockquote>📢 <b>Запропонувати канал</b>\n\n"
     "Знаєте цікавий відкритий телеграм-канал, який варто додати? "
     "Напишіть розробнику — і він підключить його до збору новин.\n\n"
-    '➡️ <a href="{contact}">Написати розробнику</a>'
+    f'➡️ <a href="{DEVELOPER_CONTACT}">Написати розробнику</a>'
     "</blockquote>"
-).format(contact=DEVELOPER_CONTACT)
+)
 
 USERS_TITLE = "<blockquote>👥 <b>Статистика підписок</b>\n\nВсього користувачів: {users}\nВсього підписок: {subs}</blockquote>"
 USERS_NO_KEYWORDS = "<blockquote>👥 Користувачів: {users}\n\nПідписок поки немає.</blockquote>"
@@ -147,3 +147,10 @@ MAP_CAPTION = (
 MAP_FAILED = (
     "<blockquote>⚠️ Не вдалося отримати карту тривог. Спробуйте пізніше.</blockquote>"
 )
+
+# --- inline-режим (@бот <слово> -> остання новина) ---
+INLINE_EMPTY = "<blockquote>🗺 Напишіть слово в інлайні: <code>@бот краматорськ</code></blockquote>"
+INLINE_TITLE = "🗺 Карта тривог"
+INLINE_DESCRIPTION = "Останні новини за словом"
+INLINE_NOTHING = "<blockquote>🔍 За запитом «{query}» новин не знайдено.</blockquote>"
+INLINE_HINT = "🔍 Остання новина за запитом «{query}»"

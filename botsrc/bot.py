@@ -14,6 +14,10 @@ from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    InlineQuery,
+    InlineQueryResultArticle,
+    InlineQueryResultsButton,
+    InputTextMessageContent,
     KeyboardButton,
     Message,
     ReplyKeyboardMarkup,
@@ -147,6 +151,8 @@ class SubscriberBot:
         dp.callback_query.register(self.on_settings_toggle, F.data.startswith("hint:toggle:"))
         dp.callback_query.register(self.on_settings_done, F.data == "hint:done")
         dp.callback_query.register(self.on_info_how, F.data == "info:how")
+        # Inline-режим: @бот краматорськ -> остання новина за словом.
+        dp.inline_query.register(self.on_inline_query)
 
     async def cmd_start(self, message: Message) -> None:
         await message.answer(i18n.WELCOME, reply_markup=_menu())
@@ -303,6 +309,49 @@ class SubscriberBot:
         except Exception:
             # «message is not modified» та подібне — не привід падати.
             pass
+
+    async def on_inline_query(self, query: InlineQuery) -> None:
+        """Inline-режим: @бот <слово> -> остання новина за словом.
+
+        Регістр не має значення. Показуємо лише ОДИН результат: найсвіжішу
+        новину, що містить слово (в тексті або в ключових словах).
+        """
+        raw = (query.query or "").strip()
+        if not raw:
+            hint = i18n.INLINE_EMPTY
+            for tag in ("<blockquote>", "</blockquote>", "<code>", "</code>"):
+                hint = hint.replace(tag, "")
+            await query.answer(
+                results=[],
+                button=InlineQueryResultsButton(text=hint),
+                cache_time=5,
+            )
+            return
+
+        rows = self.store.search_news(raw, limit=1)
+        if not rows:
+            await query.answer(
+                results=[],
+                button=InlineQueryResultsButton(text=i18n.INLINE_TITLE),
+                cache_time=5,
+            )
+            return
+
+        row = rows[0]
+        caption = row["html"] or row["text"]
+        title = i18n.INLINE_HINT.format(query=raw)
+        results = [
+            InlineQueryResultArticle(
+                id=str(row["id"]),
+                title=title,
+                description=row["text"][:120],
+                input_message_content=InputTextMessageContent(
+                    message_text=caption,
+                    parse_mode=ParseMode.HTML,
+                ),
+            )
+        ]
+        await query.answer(results=results, cache_time=5)
 
     async def on_channel_post(self, message: Message) -> None:
         await self.broadcaster.handle_channel_post(message)
