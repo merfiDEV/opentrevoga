@@ -9,6 +9,7 @@ from trevoga import health, i18n
 from trevoga.config import (
     save_aicheck,
     save_fixme,
+    save_fixme_lang,
     save_ai_model,
     save_cards,
     save_ignored_channels,
@@ -376,9 +377,7 @@ def register(client, context: HandlerContext):
     async def map_command(event):
         """Карта тривог. Працює в будь-якому чаті (ЛС, група, супергрупа)."""
         try:
-            photo_bytes, summary = await alert_map.build_map_png(
-                context.settings.assets_dir
-            )
+            photo_bytes, summary = await alert_map.build_map_png(context.settings.assets_dir)
             photo = io.BytesIO(photo_bytes)
         except Exception as error:  # noqa: BLE001
             await event.respond(
@@ -412,10 +411,18 @@ def register(client, context: HandlerContext):
         except Exception:  # noqa: BLE001
             pass
 
-    @client.on(events.NewMessage(pattern=r"^\.fixme(?:\s+(on|off|status))?\s*$"))
+    @client.on(events.NewMessage(pattern=r"^\.fixme(?:\s+(on|off|status|ru|ua))?\s*$"))
     @command(context, admin=True)
     async def fixme_command(event):
         value = (event.pattern_match.group(1) or "").lower()
+        if value in ("ru", "ua"):
+            context.fixer.fixme_lang = value
+            save_fixme_lang(value)
+            await event.respond(
+                i18n.FIXME_LANG_CHANGED.format(lang=i18n.FIXME_LANG_LABELS[value]),
+                parse_mode="html",
+            )
+            return
         if value == "on":
             context.fixer.fixme_enabled = True
             save_fixme(True)
@@ -424,7 +431,8 @@ def register(client, context: HandlerContext):
             save_fixme(False)
         elif value == "status":
             state = i18n.FIXME_STATUS_ON if context.fixer.fixme_enabled else i18n.FIXME_STATUS_OFF
-            await event.respond(i18n.FIXME_STATUS.format(state=state), parse_mode="html")
+            lang = i18n.FIXME_LANG_LABELS.get(context.fixer.fixme_lang, context.fixer.fixme_lang)
+            await event.respond(i18n.FIXME_STATUS.format(state=state, lang=lang), parse_mode="html")
             return
         else:
             context.fixer.fixme_enabled = not context.fixer.fixme_enabled

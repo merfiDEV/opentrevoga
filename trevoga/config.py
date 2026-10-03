@@ -14,6 +14,14 @@ def _env_flag(name: str, default: str = "0") -> bool:
     return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
 
 
+FIXME_LANGS = ("ua", "ru")
+
+
+def _env_lang(name: str, default: str = "ua") -> str:
+    value = os.getenv(name, "").strip().lower()
+    return value if value in FIXME_LANGS else default
+
+
 def _env_float(name: str, default: float) -> float:
     try:
         return float(os.getenv(name, "").strip() or default)
@@ -53,6 +61,7 @@ class Settings:
     cards_enabled: bool = True
     aicheck_enabled: bool = False
     fixme_enabled: bool = False
+    fixme_lang: str = "ua"
     channel_moderation_enabled: bool = False
     ignored_channels: tuple[int, ...] = ()
     bot_token: str = ""
@@ -133,6 +142,7 @@ def load_settings() -> Settings:
         cards_enabled=_env_flag("PHOTO_CARDS_ENABLED", "1"),
         aicheck_enabled=_env_flag("AICHECK_ENABLED"),
         fixme_enabled=_env_flag("FIXME_ENABLED"),
+        fixme_lang=_env_lang("FIXME_LANG"),
         channel_moderation_enabled=_env_flag("CHANNEL_MODERATION_ENABLED"),
         ignored_channels=tuple(
             int(value.strip())
@@ -192,6 +202,10 @@ def save_aicheck(enabled: bool) -> None:
 
 def save_fixme(enabled: bool) -> None:
     _write_env("FIXME_ENABLED", "1" if enabled else "0")
+
+
+def save_fixme_lang(lang: str) -> None:
+    _write_env("FIXME_LANG", lang if lang in FIXME_LANGS else "ua")
 
 
 def save_ignored_channels(channels: tuple[int, ...] | list[int]) -> None:

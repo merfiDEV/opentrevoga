@@ -13,6 +13,7 @@ TEXT_LIMIT = 4096
 UNDO_TTL = 600.0
 UNDO_MAX = 100
 
+
 def parse_fixme_answer(answer: str) -> tuple[str, str]:
     """Разобрать ответ ИИ: либо чистый текст, либо JSON {status, text|reason}."""
     raw = (answer or "").strip()
@@ -55,13 +56,15 @@ class FixService:
         text_limit=TEXT_LIMIT,
         autocheck_enabled=False,
         fixme_enabled=False,
+        fixme_lang="ua",
     ):
         self.moderation = moderation
         self.caption_limit = caption_limit
         self.text_limit = text_limit
         self.autocheck_enabled = autocheck_enabled
-        # .fixme: каждое сообщение админа прогоняется через ИИ (пунктуация).
+        # .fixme: каждое сообщение админа прогоняется через ИИ (пунктуация/перевод).
         self.fixme_enabled = fixme_enabled
+        self.fixme_lang = fixme_lang if fixme_lang in ("ua", "ru") else "ua"
         self._undo = OrderedDict()
 
     def parse_args(self, raw: str) -> tuple[str, str, bool]:
@@ -106,7 +109,7 @@ class FixService:
         if not text.strip():
             return None
         try:
-            answer = await self.moderation.fixme(text)
+            answer = await self.moderation.fixme(text, self.fixme_lang)
         except Exception:
             logger.exception("fixme failed")
             return None

@@ -90,6 +90,7 @@ async def run():
         moderation,
         autocheck_enabled=settings.aicheck_enabled,
         fixme_enabled=settings.fixme_enabled,
+        fixme_lang=settings.fixme_lang,
     )
     publisher = PublishingService(client, settings, posts, stats_repository)
     await client.start()

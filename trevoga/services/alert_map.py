@@ -48,7 +48,7 @@ USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
-VIEWPORT = {"width": 1600, "height": 1100}
+VIEWPORT = {"width": 1280, "height": 900}
 
 
 def _env_flag(name: str, default: str = "0") -> bool:
@@ -67,7 +67,7 @@ SETTLE_MS = 2500
 # Максимум, скільки чекати появи тайлів/карти після навігації.
 READY_TIMEOUT_MS = 15000
 # TTL кешу готового JPEG (0 = без кешу, завжди свіжий рендер).
-CACHE_TTL_SECONDS = _env_float("MAP_CACHE_TTL", 25.0)
+CACHE_TTL_SECONDS = _env_float("MAP_CACHE_TTL", 60.0)
 
 # Персистентний профіль Chrome (cookie Cloudflare переживають рестарт).
 #
@@ -86,11 +86,11 @@ RENDER_ATTEMPTS = 3
 
 
 def _profile_dir() -> Path:
-    """Каталог профілю Chrome, унікальний для поточного процесу."""
-    explicit = os.getenv("MAP_PROFILE_DIR", "").strip()
-    if explicit:
-        # Явно заданий шлях поважаємо як є (для сумісності та тестів).
-        return _BASE_PROFILE_DIR
+    """Каталог профілю Chrome, унікальний для поточного процесу.
+    
+    ВАЖЛИВО: завжди повертаємо підкаталог з PID процесу, щоб два процеси
+    (main.py та botsrc) не конфліктували за SingletonLock профілю Chrome.
+    """
     return _BASE_PROFILE_DIR / f"proc-{os.getpid()}"
 
 
@@ -134,7 +134,7 @@ MAP_READY_SELECTORS = (
 _LAUNCH_ARGS = [
     "--disable-blink-features=AutomationControlled",
     "--window-position=-32000,-32000",
-    "--window-size=1600,1100",
+    "--window-size=1280,900",
     "--lang=uk-UA",
     "--hide-scrollbars",
     "--mute-audio",
@@ -148,7 +148,7 @@ _INIT_SCRIPT = (
 )
 
 
-def to_photo_jpeg(png: bytes, *, quality: int = 88) -> bytes:
+def to_photo_jpeg(png: bytes, *, quality: int = 75) -> bytes:
     """Конвертує PNG у JPEG, щоб Telegram гарантовано відправив як ФОТО, а не документ."""
     from PIL import Image
 
@@ -191,7 +191,7 @@ async def _wait_map_ready(page) -> None:
         try:
             await page.wait_for_selector(sel, timeout=READY_TIMEOUT_MS, state="attached")
             # Дати тайлам долетіти після появи контейнера.
-            await page.wait_for_timeout(1200)
+            await page.wait_for_timeout(600)
             return
         except Exception:
             continue

@@ -17,7 +17,7 @@ HELP_ADMIN = """<blockquote>=== КОМАНДИ АДМІНІСТРАТОРА ===
 .stats | .stats 12 | .stats 24
 .ai_reason [MESSAGE_ID] або відповіддю на повідомлення
 .health — стан бота (uptime, AI, БД, FloodWait, остання помилка)
-.fixme on|off — автовиправлення моїх повідомлень (знаки препинання)
+.fixme on|off|status | .fixme ru|ua — автовиправлення моїх повідомлень (знаки препинання, мова)
 .map — карта повітряних тривог (PNG)
 .відміна | .delete | .видалити
 .help
@@ -127,5 +127,9 @@ FIXME_ON = "<blockquote>✍️ Режим «виправляти мої пові
 FIXME_OFF = "<blockquote>✍️ Режим «виправляти мої повідомлення»: вимкнено ❌</blockquote>"
 FIXME_STATUS_ON = "увімкнено ✅"
 FIXME_STATUS_OFF = "вимкнено ❌"
-FIXME_STATUS = "<blockquote>✍️ Режим виправлення: {state}</blockquote>"
+FIXME_STATUS = "<blockquote>✍️ Режим виправлення: {state}\nМова: {lang}</blockquote>"
+FIXME_LANG_CHANGED = "<blockquote>🌐 Мову виправлення змінено: {lang}</blockquote>"
+FIXME_LANG_UA = "українська 🇺🇦"
+FIXME_LANG_RU = "російська 🇷🇺"
 FIXME_FAILED = "<blockquote>⚠️ Не вдалося виправити (АІ недоступний)</blockquote>"
+FIXME_LANG_LABELS = {"ua": FIXME_LANG_UA, "ru": FIXME_LANG_RU}

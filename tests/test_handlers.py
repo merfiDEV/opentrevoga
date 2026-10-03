@@ -410,3 +410,23 @@ def test_truncate_caption_handles_no_html():
     result = sources._truncate_caption(caption)
     assert len(result) <= 1024
     assert "…" in result
+
+
+@pytest.mark.asyncio
+async def test_addchannel_updates_live_source_filter(monkeypatch):
+    client = FakeEditClient()
+    async def get_entity(target):
+        return object()
+    client.get_entity = get_entity
+    context = build_context(client=client)
+    context.source_channels = set()
+    commands.register(client, context)
+    handler = next(h for h in client.handlers if h.__name__ == "addchannel")
+    monkeypatch.setattr(commands.utils, "get_peer_id", lambda entity: 777)
+    saved = {}
+    monkeypatch.setattr(commands, "save_source_channels", lambda channels: saved.__setitem__("channels", channels))
+
+    await handler(FakeFixEvent(".addchannel add @source", groups=["add", "@source"]))
+
+    assert context.source_channels == {777}
+    assert saved["channels"] == (777,)

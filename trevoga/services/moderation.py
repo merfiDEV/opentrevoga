@@ -35,11 +35,9 @@ FIX_PROMPTS = {
     "official": FIX_PROMPT + " Використовуй сухий офіційний стиль без емоцій.",
     "neutral": FIX_PROMPT + " Використовуй нейтральний інформаційний стиль.",
 }
-FIXME_PROMPT = (
-    "Ти — коректор української мови. Завжди перекладай текст "
-    "українською, якщо він іншою мовою. Додай лише знаки "
-    "препинання (коми, крапки, знаки питання, оклики, "
-    "двокрапки, тире) та виправ орфографічні помилки. "
+FIXME_PROMPT_COMMON = (
+    "Додай лише знаки препинання (коми, крапки, знаки питання, "
+    "оклики, двокрапки, тире) та виправ орфографічні помилки. "
     "Заборонено: змінювати слова, додавати або видаляти "
     "слова, змінювати сенс. КАТЕГОРИЧНО НЕ змінюй "
     "спеціальні знаки та символи: +, -, *, /, =, %, #, @, &, |, ^, <, >, "
@@ -53,6 +51,23 @@ FIXME_PROMPT = (
     "У звичайному режимі відповідай лише виправленим "
     "текстом без пояснень."
 )
+FIXME_PROMPT_LANGS = {
+    "ua": (
+        "Ти — коректор української мови. Завжди перекладай текст "
+        "українською, якщо він іншою мовою. " + FIXME_PROMPT_COMMON
+    ),
+    "ru": (
+        "Ти — коректор російської мови. Завжди перекладай текст "
+        "російською, якщо він іншою мовою. " + FIXME_PROMPT_COMMON
+    ),
+}
+FIXME_PROMPT = FIXME_PROMPT_LANGS["ua"]
+
+
+def fixme_prompt(lang: str = "ua") -> str:
+    return FIXME_PROMPT_LANGS.get(lang, FIXME_PROMPT_LANGS["ua"])
+
+
 FIX_MODES = tuple(FIX_PROMPTS)
 FIX_INSTRUCTION_LIMIT = 200
 FIX_INSTRUCTION_BANNED = (
@@ -194,10 +209,11 @@ class ModerationService:
             logger.exception("AI text correction failed")
             return None
 
-    async def fixme(self, text: str) -> str | None:
-        """Только пунктуация/орфография через отдельну модель."""
+    async def fixme(self, text: str, lang: str = "ua") -> str | None:
+        """Только пунктуация/орфография/перевод через отдельную модель."""
         try:
-            return await self.fix_client.complete(FIXME_PROMPT, text, temperature=0.1) or None
+            prompt = fixme_prompt(lang)
+            return await self.fix_client.complete(prompt, text, temperature=0.1) or None
         except Exception:
             logger.exception("AI fixme failed")
             return None
